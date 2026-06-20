@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen } from "lucide-react";
+import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload } from "lucide-react";
 import { storage } from "../lib/storage";
 import { generateText } from "../lib/ai";
-import { listDesigns, saveDesign, deleteDesign } from "../lib/library";
+import { listDesigns, saveDesign, deleteDesign, exportDesigns, importDesigns } from "../lib/library";
 
 // DOM (inline style) renkleri — CSS değişkenleri (tema ile değişir)
 const GOLD = "var(--gold)";
@@ -57,6 +57,7 @@ export default function CozguCizgiDenemesi() {
   const [palette, setPalette] = useState(["#F4F1E8", "#EFE6D3", "#E5D9C3", "#DEC9A6", "#CFC3AE", "#BCAF99", "#A8967C", "#D6D8DA", "#C2C6C9", "#A6AAAD", "#7C8388", "#3C4248", "#1A1C1E", "#C9A24B", "#1F2A40", "#6E2230", "#1E5A62", "#8FA08A"]);
   const [copied, setCopied] = useState(false);
   const [savedList, setSavedList] = useState(() => listDesigns()); // mount'ta localStorage'dan yükle (tema/ai state'leriyle aynı desen)
+  const [libMsg, setLibMsg] = useState("");
 
   // tema + ayarlar
   const [theme, setTheme] = useState(() => ls("ccd:theme", "dark"));
@@ -96,6 +97,7 @@ export default function CozguCizgiDenemesi() {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const drag = useRef(null);
+  const importRef = useRef(null);
 
   const activeKey = mode === "single" ? "warp" : editTab;
   const list = activeKey === "warp" ? warp : weft;
@@ -308,6 +310,21 @@ export default function CozguCizgiDenemesi() {
     setSelectedId(null);
   };
   const removeSaved = (id) => { deleteDesign(id); setSavedList(listDesigns()); };
+  const exportLibrary = () => {
+    const blob = new Blob([exportDesigns()], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `cozgu-desenler-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+  const importLibrary = async (file) => {
+    try {
+      const { added, list } = importDesigns(JSON.parse(await file.text()));
+      setSavedList(list);
+      setLibMsg(added > 0 ? `${added} desen içe aktarıldı.` : "Dosyada geçerli desen bulunamadı.");
+    } catch { setLibMsg("Dosya okunamadı veya geçersiz JSON."); }
+    setTimeout(() => setLibMsg(""), 4000);
+  };
 
   const buildDesignFromParsed = (parsed, N, G, K, grounds) => {
     if (!parsed || !parsed.str || !parsed.ways) return null;
@@ -681,10 +698,18 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
 
         {/* kayıtlı desenler */}
         <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 16, marginTop: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <FolderOpen size={17} color={GOLD} />
-            <span style={{ fontSize: 14, fontWeight: 700 }}>Kayıtlı desenler ({savedList.length})</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <FolderOpen size={17} color={GOLD} />
+              <span style={{ fontSize: 14, fontWeight: 700 }}>Kayıtlı desenler ({savedList.length})</span>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={exportLibrary} disabled={!savedList.length} style={{ ...btn, padding: "6px 10px", opacity: savedList.length ? 1 : 0.5 }}><Download size={14} /> Dışa aktar</button>
+              <button onClick={() => importRef.current?.click()} style={{ ...btn, padding: "6px 10px" }}><Upload size={14} /> İçe aktar</button>
+              <input ref={importRef} type="file" accept="application/json,.json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) importLibrary(f); e.target.value = ""; }} />
+            </div>
           </div>
+          {libMsg && <div style={{ fontSize: 12, color: TEAL, marginBottom: 10 }}>{libMsg}</div>}
           {savedList.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>Henüz kayıt yok. Kart veya editörden "Kaydet" ile ekle.</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px,1fr))", gap: 12 }}>
             {savedList.map((rec) => (

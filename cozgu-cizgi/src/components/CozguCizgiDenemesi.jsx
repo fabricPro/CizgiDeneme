@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload } from "lucide-react";
+import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload, Pencil, FilePlus, Layers } from "lucide-react";
 import { storage } from "../lib/storage";
 import { generateText } from "../lib/ai";
-import { listDesigns, saveDesign, addVariant, deleteVariant, deleteDesign, exportDesigns, importDesigns } from "../lib/library";
+import { listDesigns, saveDesign, addVariant, deleteVariant, deleteDesign, renameDesign, renameVariant, exportDesigns, importDesigns } from "../lib/library";
 
 // DOM (inline style) renkleri — CSS değişkenleri (tema ile değişir)
 const GOLD = "var(--gold)";
@@ -47,13 +47,14 @@ const ls = (k, d) => { try { const v = localStorage.getItem(k); return v == null
 export default function CozguCizgiDenemesi() {
   const [mode, setMode] = useState("single");
   const [orientation, setOrientation] = useState("v");
-  const [warp, setWarp] = useState(clone(WARP_START));
-  const [weft, setWeft] = useState(clone(WEFT_START));
+  const [warp, setWarp] = useState([]);
+  const [weft, setWeft] = useState([]);
   const [warpDensity, setWarpDensity] = useState(24);
   const [weftDensity, setWeftDensity] = useState(22);
   const [fabricCm, setFabricCm] = useState(50);
   const [editTab, setEditTab] = useState("warp");
-  const [selectedId, setSelectedId] = useState(1);
+  const [selectedId, setSelectedId] = useState(null);
+  const [checkedIds, setCheckedIds] = useState(() => new Set()); // toplu renk için çoklu seçim
   const [palette, setPalette] = useState(["#F4F1E8", "#EFE6D3", "#E5D9C3", "#DEC9A6", "#CFC3AE", "#BCAF99", "#A8967C", "#D6D8DA", "#C2C6C9", "#A6AAAD", "#7C8388", "#3C4248", "#1A1C1E", "#C9A24B", "#1F2A40", "#6E2230", "#1E5A62", "#8FA08A"]);
   const [copied, setCopied] = useState(false);
   const [savedList, setSavedList] = useState(() => listDesigns()); // mount'ta localStorage'dan yükle (tema/ai state'leriyle aynı desen)
@@ -65,6 +66,8 @@ export default function CozguCizgiDenemesi() {
   const cv = CANVAS[theme] || CANVAS.dark;
   const [showSettings, setShowSettings] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [showGenerator, setShowGenerator] = useState(() => ls("ccd:showGenerator", "0") === "1"); // üretici varsayılan gizli
+  useEffect(() => { try { localStorage.setItem("ccd:showGenerator", showGenerator ? "1" : "0"); } catch (e) { /* */ } }, [showGenerator]);
   const [aiProvider, setAiProvider] = useState(() => ls("ccd:aiProvider", "gemini"));
   const [aiKey, setAiKey] = useState(() => ls("ccd:aiKey", ""));
   const [aiModel, setAiModel] = useState(() => ls("ccd:aiModel", ""));
@@ -92,6 +95,7 @@ export default function CozguCizgiDenemesi() {
   const [pxPerCm, setPxPerCm] = useState(38);     // kalibre edilmiş CSS px/cm (1:1)
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [reportMode, setReportMode] = useState("repeat"); // "repeat" | "unit" (tekrarlı / birim rapor)
   const [calibrating, setCalibrating] = useState(false);
   const [calPx, setCalPx] = useState(38);
 
@@ -164,14 +168,16 @@ export default function CozguCizgiDenemesi() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = cv.bg; ctx.fillRect(0, 0, W, H);
     if (unit <= 0) return;
+    const unitMode = reportMode === "unit"; // birim rapor: tek tekrar göster
 
     // bant ekseninde döşeme (modulo ile sanal): pan kadar kaydır
     const tileX = (segs, repPx, panX, drawSeg) => {
       if (repPx <= 0) return;
-      let start = -((panX % repPx + repPx) % repPx);
+      let start = unitMode ? -panX : -((panX % repPx + repPx) % repPx);
       for (let base = start; base < W; base += repPx) {
         let p = base;
-        for (const s of segs) { const w = (s.ends || 0) * unit / (segs === weft ? weftDensity : (mode === "check" ? warpDensity : warpDensity)); if (w > 0) { drawSeg(s, p, w); p += w; } }
+        for (const s of segs) { const w = (s.ends || 0) * unit / (segs === weft ? weftDensity : warpDensity); if (w > 0) { drawSeg(s, p, w); p += w; } }
+        if (unitMode) break;
       }
     };
 
@@ -183,15 +189,16 @@ export default function CozguCizgiDenemesi() {
       // çözgü (dikey bantlar) — eni fabricCm kadar kırp
       const fabX0 = -pan.x, fabX1 = fabX0 + fabricCm * unit;
       ctx.save();
-      ctx.beginPath(); ctx.rect(Math.max(0, fabX0), 0, Math.max(0, Math.min(W, fabX1) - Math.max(0, fabX0)), H); ctx.clip();
+      if (!unitMode) { ctx.beginPath(); ctx.rect(Math.max(0, fabX0), 0, Math.max(0, Math.min(W, fabX1) - Math.max(0, fabX0)), H); ctx.clip(); }
       tileX(warp, warpRepPx, pan.x, (s, p, w) => { ctx.fillStyle = s.color; ctx.fillRect(p, 0, w + 0.5, H); });
       // atkı (yatay bantlar, %50 karışım)
       ctx.globalAlpha = 0.5;
       if (weftRepPx > 0) {
-        let start = -((pan.y % weftRepPx + weftRepPx) % weftRepPx);
+        let start = unitMode ? -pan.y : -((pan.y % weftRepPx + weftRepPx) % weftRepPx);
         for (let base = start; base < H; base += weftRepPx) {
           let p = base;
           for (const s of weft) { const h = (s.ends || 0) * unit / weftDensity; if (h > 0) { ctx.fillStyle = s.color; ctx.fillRect(0, p, W, h + 0.5); p += h; } }
+          if (unitMode) break;
         }
       }
       ctx.globalAlpha = 1;
@@ -204,15 +211,18 @@ export default function CozguCizgiDenemesi() {
       const repPx = repeatEnds * unit / dd;
       const fab0 = horizontal ? -pan.y : -pan.x, fab1 = fab0 + fabricCm * unit;
       ctx.save();
-      if (horizontal) { ctx.beginPath(); ctx.rect(0, Math.max(0, fab0), W, Math.max(0, Math.min(H, fab1) - Math.max(0, fab0))); ctx.clip(); }
-      else { ctx.beginPath(); ctx.rect(Math.max(0, fab0), 0, Math.max(0, Math.min(W, fab1) - Math.max(0, fab0)), H); ctx.clip(); }
+      if (!unitMode) {
+        if (horizontal) { ctx.beginPath(); ctx.rect(0, Math.max(0, fab0), W, Math.max(0, Math.min(H, fab1) - Math.max(0, fab0))); ctx.clip(); }
+        else { ctx.beginPath(); ctx.rect(Math.max(0, fab0), 0, Math.max(0, Math.min(W, fab1) - Math.max(0, fab0)), H); ctx.clip(); }
+      }
       const panV = horizontal ? pan.y : pan.x;
       if (repPx > 0) {
-        let start = -((panV % repPx + repPx) % repPx);
+        let start = unitMode ? -panV : -((panV % repPx + repPx) % repPx);
         const lim = horizontal ? H : W;
         for (let base = start; base < lim; base += repPx) {
           let p = base;
           for (const s of warp) { const w = (s.ends || 0) * unit / dd; if (w > 0) { ctx.fillStyle = s.color; if (horizontal) ctx.fillRect(0, p, W, w + 0.5); else ctx.fillRect(p, 0, w + 0.5, H); p += w; } }
+          if (unitMode) break;
         }
       }
       ctx.restore();
@@ -220,7 +230,7 @@ export default function CozguCizgiDenemesi() {
     }
 
     drawRuler(ctx, W, H, unit, pan.x, cv);
-  }, [warp, weft, warpDensity, weftDensity, designDensity, fabricCm, mode, orientation, unit, pan, repeatEnds, cv]);
+  }, [warp, weft, warpDensity, weftDensity, designDensity, fabricCm, mode, orientation, unit, pan, repeatEnds, cv, reportMode]);
 
   useEffect(() => {
     draw();
@@ -253,15 +263,21 @@ export default function CozguCizgiDenemesi() {
   const setZoomKeep = (z) => { setZoom(clamp(z, 0.05, 4)); };
 
   const updateSeg = (id, patch) => { setWarp((s) => s.map((x) => (x.id === id ? { ...x, ...patch } : x))); setWeft((s) => s.map((x) => (x.id === id ? { ...x, ...patch } : x))); };
-  const removeSeg = (id) => setList((s) => s.filter((x) => x.id !== id));
+  const updateMany = (ids, patch) => { setWarp((s) => s.map((x) => ids.has(x.id) ? { ...x, ...patch } : x)); setWeft((s) => s.map((x) => ids.has(x.id) ? { ...x, ...patch } : x)); };
+  const removeSeg = (id) => { setList((s) => s.filter((x) => x.id !== id)); setCheckedIds((c) => { if (!c.has(id)) return c; const n = new Set(c); n.delete(id); return n; }); };
   const dupSeg = (id) => setList((s) => { const i = s.findIndex((x) => x.id === id); const arr = [...s]; arr.splice(i + 1, 0, { ...s[i], id: nextId++ }); return arr; });
   const moveSeg = (id, d) => setList((s) => { const i = s.findIndex((x) => x.id === id), j = i + d; if (j < 0 || j >= s.length) return s; const arr = [...s]; [arr[i], arr[j]] = [arr[j], arr[i]]; return arr; });
-  const addSeg = () => { const nid = nextId++; setList((s) => [...s, { id: nid, color: palette[1], ends: 8 }]); setSelectedId(nid); };
+  const addSeg = () => { const nid = nextId++; setList((s) => [...s, { id: nid, color: palette[1] || "#CCCCCC", ends: 8, tag: "" }]); setSelectedId(nid); };
   const setEnds = (id, n) => updateSeg(id, { ends: Math.max(0, Math.round(n)) });
   const setCm = (id, cm) => updateSeg(id, { ends: Math.max(0, Math.round((cm || 0) * density)) });
-  const applyColor = (hex) => { if (selectedId != null) updateSeg(selectedId, { color: hex }); };
+  const setTag = (id, tag) => updateSeg(id, { tag });
+  const applyColor = (hex) => { if (checkedIds.size > 0) updateMany(checkedIds, { color: hex }); else if (selectedId != null) updateSeg(selectedId, { color: hex }); };
+  const toggleCheck = (id) => setCheckedIds((c) => { const n = new Set(c); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectByTag = (tag) => { if (!tag) return; const ids = list.filter((s) => (s.tag || "") === tag).map((s) => s.id); setCheckedIds((c) => { const n = new Set(c); ids.forEach((i) => n.add(i)); return n; }); };
+  const clearChecks = () => setCheckedIds(new Set());
   const addToPalette = () => { const cur = [...warp, ...weft].find((x) => x.id === selectedId)?.color; if (cur && !palette.includes(cur)) setPalette((p) => [...p, cur]); };
-  const reset = () => { setWarp(clone(WARP_START)); setWeft(clone(WEFT_START)); };
+  const reset = () => { setWarp(clone(WARP_START)); setWeft(clone(WEFT_START)); setSelectedId(null); setCheckedIds(new Set()); };
+  const newDesign = () => { setWarp([]); setWeft([]); setSelectedId(null); setCheckedIds(new Set()); setMode("single"); setOrientation("v"); setActiveDesignId(null); };
 
   // --- akıllı desen üretici ---
   const fitTo = (segs, N) => {
@@ -299,7 +315,7 @@ export default function CozguCizgiDenemesi() {
     if (!warp.length) return;
     const name = prompt("Desen adı:", "Desen"); if (name === null) return;
     const rec = saveDesign({
-      name: name || "Desen", ends: warp.map(s => s.ends),
+      name: name || "Desen", ends: warp.map(s => s.ends), tags: warp.map(s => s.tag || ""),
       warpDensity, weftDensity, fabricCm, mode, orientation,
       variants: [{ name: "Varyant 1", colors: warp.map(s => s.color) }],
     });
@@ -321,6 +337,7 @@ export default function CozguCizgiDenemesi() {
   const saveWay = (d, way) => {
     const rec = saveDesign({
       name: way.name || "Desen", ends: d.struct.map(s => s.ends),
+      tags: d.struct.map(s => s.role < d.G ? "z" + (s.role + 1) : "b" + (s.role - d.G + 1)),
       warpDensity, weftDensity, fabricCm, mode, orientation,
       variants: [{ name: way.name || "Varyant 1", colors: segmentsOf(d.struct, way.colors).map(s => s.color) }],
     });
@@ -331,6 +348,7 @@ export default function CozguCizgiDenemesi() {
   const saveDesignAll = (d, di) => {
     const rec = saveDesign({
       name: `Desen ${di + 1}`, ends: d.struct.map(s => s.ends),
+      tags: d.struct.map(s => s.role < d.G ? "z" + (s.role + 1) : "b" + (s.role - d.G + 1)),
       warpDensity, weftDensity, fabricCm, mode, orientation,
       variants: d.ways.map(w => ({ name: w.name, colors: segmentsOf(d.struct, w.colors).map(s => s.color) })),
     });
@@ -338,14 +356,16 @@ export default function CozguCizgiDenemesi() {
     if (rec) { setActiveDesignId(rec.id); flash(`${d.ways.length} varyantlı desen kaydedildi.`); }
   };
   const loadVariant = (d, v) => {
-    setMode(d.mode || "single"); setOrientation(d.orientation || "h");
+    setMode(d.mode || "single"); setOrientation(d.orientation || "v");
     if (d.warpDensity) setWarpDensity(d.warpDensity);
     if (d.weftDensity) setWeftDensity(d.weftDensity);
     if (d.fabricCm) setFabricCm(d.fabricCm);
-    setWarp(d.ends.map((e, i) => ({ id: nextId++, color: v.colors[i], ends: e })));
-    setSelectedId(null);
+    setWarp(d.ends.map((e, i) => ({ id: nextId++, color: v.colors[i], ends: e, tag: (d.tags && d.tags[i]) || "" })));
+    setSelectedId(null); setCheckedIds(new Set());
     setActiveDesignId(d.id);
   };
+  const renameDesignUI = (d) => { const n = prompt("Desen adı:", d.name); if (n != null && n.trim()) setSavedList(renameDesign(d.id, n.trim())); };
+  const renameVariantUI = (d, v) => { const n = prompt("Varyant adı:", v.name); if (n != null && n.trim()) setSavedList(renameVariant(d.id, v.id, n.trim())); };
   const removeDesign = (id) => { setSavedList(deleteDesign(id)); if (activeDesignId === id) setActiveDesignId(null); };
   const removeVariant = (designId, vId) => {
     const list = deleteVariant(designId, vId);
@@ -454,7 +474,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
   };
 
   const loadDesign = (d, way) => {
-    setMode("single"); setOrientation("h"); // çözgü çizgisi → asılı görünümde yatay
+    setMode("single"); setOrientation("v"); // varsayılan dikey (istenirse Yatay'a çevrilir)
     const segs = d.struct.map((s) => ({ id: nextId++, color: way.colors[s.role] ?? way.colors[0], ends: s.ends }));
     setWarp(segs); setSelectedId(segs[0]?.id ?? null);
     setFabricCm(Math.max(fabricCm, Math.round((d.struct.reduce((t, x) => t + x.ends, 0) / warpDensity) * 100) / 100));
@@ -530,20 +550,39 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
               {palette.map((c) => (<button key={c} onClick={() => applyColor(c)} title={nameOf(c)} style={{ width: 24, height: 24, borderRadius: 6, background: c, border: `1px solid ${LINE}`, cursor: "pointer", padding: 0 }} />))}
               <button onClick={addToPalette} title="Seçili rengi palete ekle" style={{ ...iconBtn, width: 24, height: 24, padding: 0 }}><Plus size={13} /></button>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: MUTE, textTransform: "uppercase", letterSpacing: 1 }}>{mode === "check" ? (activeKey === "warp" ? "Çözgü renk sırası" : "Atkı renk sırası") : `${sysLabel} renk sırası`}</span>
-              <button onClick={reset} style={iconBtn} title="Başa dön"><RotateCcw size={15} /></button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={newDesign} style={{ ...btn, padding: "5px 9px" }} title="Boş çalışma sayfası aç"><FilePlus size={14} /> Yeni desen</button>
+                <button onClick={reset} style={iconBtn} title="Örnek deseni yükle"><RotateCcw size={15} /></button>
+              </div>
             </div>
+            {checkedIds.size > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "rgba(45,212,191,0.08)", border: `1px solid ${TEAL}`, borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: TEAL, fontWeight: 600 }}>{checkedIds.size} satır seçili</span>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: TEXT, cursor: "pointer" }}>
+                  Toplu renk
+                  <input type="color" onChange={(e) => applyColor(e.target.value)} title="Seçili satırlara uygula" style={{ width: 30, height: 30, border: "none", borderRadius: 6, background: "none", cursor: "pointer" }} />
+                </label>
+                <span style={{ fontSize: 11, color: MUTE }}>(palet de seçililere uygular)</span>
+                <button onClick={clearChecks} style={{ ...btn, padding: "5px 9px", marginLeft: "auto" }}>Seçimi temizle</button>
+              </div>
+            )}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {list.map((s, i) => {
                 const sel = s.id === selectedId;
                 return (
                   <div key={s.id} onClick={() => setSelectedId(s.id)} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: SUNK, border: `1px solid ${sel ? GOLD : LINE}`, borderRadius: 10, padding: 8, cursor: "pointer", boxShadow: sel ? `0 0 0 1px ${GOLD}` : "none" }}>
+                    <input type="checkbox" checked={checkedIds.has(s.id)} onChange={() => toggleCheck(s.id)} onClick={(e) => e.stopPropagation()} title="Toplu seçim" style={{ width: 18, height: 18, flexShrink: 0, cursor: "pointer", accentColor: TEAL }} />
                     <input type="color" value={s.color} onChange={(e) => updateSeg(s.id, { color: e.target.value })} onClick={(e) => e.stopPropagation()} style={{ width: 36, height: 36, border: "none", borderRadius: 8, background: "none", cursor: "pointer", flexShrink: 0 }} />
-                    <span title={s.color} onClick={(e) => { e.stopPropagation(); e.currentTarget.previousSibling?.click(); }} style={{ width: 92, fontSize: 12, color: TEXT, border: `1px solid ${LINE}`, borderRadius: 6, padding: "7px 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }}>{nameOf(s.color)}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 150 }}>
-                      <NumInput value={s.ends} decimals={0} onCommit={(n) => setEnds(s.id, n)} suffix={unitLabel} width={56} />
-                      <NumInput value={density > 0 ? s.ends / density : 0} decimals={2} onCommit={(n) => setCm(s.id, n)} suffix="cm" width={64} />
+                    <span title={s.color} onClick={(e) => { e.stopPropagation(); e.currentTarget.previousSibling?.click(); }} style={{ width: 76, fontSize: 12, color: TEXT, border: `1px solid ${LINE}`, borderRadius: 6, padding: "7px 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }}>{nameOf(s.color)}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                      <input value={s.tag || ""} onChange={(e) => setTag(s.id, e.target.value)} placeholder="b1" title="Bant etiketi (grup adı)" style={{ width: 42, fontSize: 12, color: TEXT, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "7px 4px", textAlign: "center" }} />
+                      <button onClick={() => selectByTag(s.tag)} disabled={!s.tag} title="Aynı etiketli satırları seç" style={{ ...iconBtn, opacity: s.tag ? 1 : 0.3 }}><Layers size={13} /></button>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 130 }}>
+                      <NumInput value={s.ends} decimals={0} onCommit={(n) => setEnds(s.id, n)} suffix={unitLabel} width={52} />
+                      <NumInput value={density > 0 ? s.ends / density : 0} decimals={2} onCommit={(n) => setCm(s.id, n)} suffix="cm" width={60} />
                     </div>
                     <div style={{ display: "flex", gap: 2, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => moveSeg(s.id, -1)} disabled={i === 0} style={{ ...iconBtn, opacity: i === 0 ? 0.3 : 1 }}><ArrowUp size={14} /></button>
@@ -626,6 +665,12 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                 <button onClick={fitWidth} style={btn} title="Tümünü sığdır"><Maximize size={15} /> Sığdır</button>
                 <button onClick={() => { setCalPx(pxPerCm); setCalibrating(true); }} style={{ ...btn, marginLeft: "auto", borderColor: TEAL, color: TEAL }}><Ruler size={15} /> Cetveli ayarla</button>
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: MUTE }}>Görünüm</span>
+                {[["repeat", "Tekrarlı rapor"], ["unit", "Birim rapor"]].map(([v, l]) => (
+                  <button key={v} onClick={() => setReportMode(v)} style={{ ...btn, padding: "6px 12px", borderColor: reportMode === v ? GOLD : LINE, color: reportMode === v ? GOLD : TEXT, background: reportMode === v ? "rgba(232,160,48,0.08)" : "transparent" }}>{l}</button>
+                ))}
+              </div>
               <div style={{ fontSize: 11, color: MUTE, marginTop: 8 }}>
                 1:1 ölçek: 1 cm = {fmt(pxPerCm)} px · şu an 1 cm = {fmt(unit)} px (zoom %{Math.round(zoom * 100)}) · kumaş eni {fmt(fabricCm)} cm
               </div>
@@ -667,7 +712,8 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
           </div>
         </div>
 
-        {/* akıllı desen üretici */}
+        {/* akıllı desen üretici (Ayarlar'dan aç/kapat) */}
+        {showGenerator && (
         <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 16, marginTop: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <Sparkles size={17} color={GOLD} />
@@ -741,6 +787,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
             </div>
           ))}
         </div>
+        )}
 
         {/* kayıtlı desenler */}
         <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 16, marginTop: 18 }}>
@@ -769,6 +816,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                       <div style={{ fontSize: 11, color: MUTE, marginTop: 2 }}>{new Date(d.date).toLocaleDateString("tr-TR")} · {totalEnds} tel · {d.variants.length} varyant</div>
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => renameDesignUI(d)} title="Deseni yeniden adlandır" style={{ ...iconBtn, padding: 7 }}><Pencil size={13} /></button>
                       <button onClick={() => addVariantTo(d)} title="Editördeki renkleri bu desene varyant olarak ekle" style={{ ...btn, padding: "6px 10px" }}><Plus size={14} /> Varyant ekle</button>
                       <button onClick={() => removeDesign(d.id)} title="Deseni sil" style={{ ...btn, padding: "6px 10px", color: RED }}><Trash2 size={14} /></button>
                     </div>
@@ -777,7 +825,10 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                     {d.variants.map((v) => (
                       <div key={v.id} style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 10 }}>
                         <MiniStripe segments={d.ends.map((e, i) => ({ ends: e, color: v.colors[i] }))} height={40} />
-                        <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.name}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v.name}</div>
+                          <button onClick={() => renameVariantUI(d, v)} title="Varyantı yeniden adlandır" style={{ ...iconBtn, padding: 4 }}><Pencil size={12} /></button>
+                        </div>
                         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                           <button onClick={() => loadVariant(d, v)} style={{ ...btn, flex: 1, padding: "6px 8px", borderColor: TEAL, color: TEAL }}>Yükle</button>
                           <button onClick={() => removeVariant(d.id, v.id)} title="Varyantı sil" style={{ ...btn, padding: "6px 8px", color: RED }}><Trash2 size={13} /></button>
@@ -808,6 +859,13 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
             <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
               {[["dark", "Koyu"], ["light", "Açık"]].map(([v, l]) => (
                 <button key={v} onClick={() => setTheme(v)} style={{ ...btn, flex: 1, borderColor: theme === v ? GOLD : LINE, color: theme === v ? GOLD : TEXT, background: theme === v ? "rgba(232,160,48,0.08)" : "transparent" }}>{l}</button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 12, color: MUTE, marginBottom: 6 }}>Akıllı desen üretici</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+              {[[true, "Göster"], [false, "Gizle"]].map(([v, l]) => (
+                <button key={l} onClick={() => setShowGenerator(v)} style={{ ...btn, flex: 1, borderColor: showGenerator === v ? GOLD : LINE, color: showGenerator === v ? GOLD : TEXT, background: showGenerator === v ? "rgba(232,160,48,0.08)" : "transparent" }}>{l}</button>
               ))}
             </div>
 
@@ -868,13 +926,17 @@ function drawRuler(ctx, W, H, unit, panX, cv) {
   ctx.fillStyle = cv.ruler; ctx.fillRect(0, 0, W, band);
   ctx.strokeStyle = cv.tickLine; ctx.fillStyle = cv.tick;
   ctx.lineWidth = 1; ctx.font = "9px ui-sans-serif, system-ui, sans-serif"; ctx.textBaseline = "top";
-  const firstCm = Math.floor(panX / unit);
-  let cm = firstCm;
-  for (let x = -((panX % unit + unit) % unit); x < W; x += unit) {
-    const major = cm % 5 === 0;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, major ? band : band * 0.55); ctx.stroke();
-    if (major && unit > 14) ctx.fillText(String(cm), x + 2, 3);
-    cm++;
+  const mm = unit / 10;                 // px / mm
+  if (mm <= 0) return;
+  const showMm = mm >= 5;               // mm tikleri ancak yeterince aralıklıysa
+  const labelEvery = unit > 34 ? 1 : 5; // cm yeterince genişse her cm, değilse her 5 cm
+  let i = Math.floor(panX / mm);        // mm indeksi
+  for (let x = -((panX % mm + mm) % mm); x < W; x += mm, i++) {
+    const isCm = i % 10 === 0, isHalf = i % 5 === 0;
+    if (!isCm && !isHalf && !showMm) continue;            // ara mm'leri sıkışıksa atla
+    const h = isCm ? band : (isHalf ? band * 0.62 : band * 0.4);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    if (isCm) { const cm = Math.round(i / 10); if (cm % labelEvery === 0 && unit > 14) ctx.fillText(String(cm), x + 2, 3); }
   }
 }
 

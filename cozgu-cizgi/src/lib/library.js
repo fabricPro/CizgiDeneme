@@ -32,7 +32,8 @@ function normalize(d) {
         colors: ends.map((_, i) => String(v.colors[i] ?? v.colors[v.colors.length - 1] ?? "#cccccc")),
       }));
     if (!ends.length || !variants.length) return null;
-    return { ...base, ends, ...meta(d), variants };
+    const tags = Array.isArray(d.tags) ? ends.map((_, i) => String(d.tags[i] ?? "")) : ends.map(() => "");
+    return { ...base, ends, tags, ...meta(d), variants };
   }
   // eski düz şema: segments[{color,ends}] → tek varyantlı desen
   if (Array.isArray(d.segments) && d.segments.length) {
@@ -41,6 +42,7 @@ function normalize(d) {
     return {
       ...base,
       ends: segs.map(s => Math.max(0, Math.round(Number(s.ends) || 0))),
+      tags: segs.map(s => String(s.tag ?? "")),
       ...meta(d),
       variants: [{ id: newId(), name: "Varyant 1", colors: segs.map(s => String(s.color)) }],
     };
@@ -81,6 +83,12 @@ export function deleteVariant(designId, variantId) {
 
 export function deleteDesign(designId) { const all = listDesigns().filter(d => d.id !== designId); write(all); return all; }
 export function renameDesign(designId, name) { const all = listDesigns().map(d => d.id === designId ? { ...d, name } : d); write(all); return all; }
+export function renameVariant(designId, variantId, name) {
+  const all = listDesigns();
+  const d = all.find(x => x.id === designId);
+  if (d) { const v = d.variants.find(x => x.id === variantId); if (v) v.name = name; write(all); }
+  return all;
+}
 
 // --- dışa / içe aktarma (JSON dosyası) ---
 export function exportDesigns() {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload, Pencil, FilePlus, Layers } from "lucide-react";
+import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload, Pencil, FilePlus, Layers, ChevronDown, ChevronRight, Search } from "lucide-react";
 import { storage } from "../lib/storage";
 import { generateText } from "../lib/ai";
 import { listDesigns, saveDesign, addVariant, deleteVariant, deleteDesign, renameDesign, renameVariant, exportDesigns, importDesigns } from "../lib/library";
@@ -60,6 +60,9 @@ export default function CozguCizgiDenemesi() {
   const [savedList, setSavedList] = useState(() => listDesigns()); // mount'ta localStorage'dan yükle (tema/ai state'leriyle aynı desen)
   const [libMsg, setLibMsg] = useState("");
   const [activeDesignId, setActiveDesignId] = useState(null); // editörde yüklü/oluşturulmuş kayıtlı desen
+  const [view, setView] = useState("editor"); // "editor" | "library" (üst sekme)
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [openDesigns, setOpenDesigns] = useState(() => new Set()); // akordiyonda açık desenler
 
   // tema + ayarlar
   const [theme, setTheme] = useState(() => ls("ccd:theme", "dark"));
@@ -363,7 +366,10 @@ export default function CozguCizgiDenemesi() {
     setWarp(d.ends.map((e, i) => ({ id: nextId++, color: v.colors[i], ends: e, tag: (d.tags && d.tags[i]) || "" })));
     setSelectedId(null); setCheckedIds(new Set());
     setActiveDesignId(d.id);
+    setView("editor"); // yükleyince editöre dön
   };
+  const toggleOpen = (id) => setOpenDesigns((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const shownDesigns = librarySearch.trim() ? savedList.filter((d) => (d.name || "").toLowerCase().includes(librarySearch.trim().toLowerCase())) : savedList;
   const renameDesignUI = (d) => { const n = prompt("Desen adı:", d.name); if (n != null && n.trim()) setSavedList(renameDesign(d.id, n.trim())); };
   const renameVariantUI = (d, v) => { const n = prompt("Varyant adı:", v.name); if (n != null && n.trim()) setSavedList(renameVariant(d.id, v.id, n.trim())); };
   const removeDesign = (id) => { setSavedList(deleteDesign(id)); if (activeDesignId === id) setActiveDesignId(null); };
@@ -529,6 +535,14 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
         </div>
         <p style={{ color: MUTE, fontSize: 13, margin: "4px 0 16px" }}>Tel veya cm gir; master sıklık çevirir. Kalibre edince önizleme ekranda gerçek 1:1 ölçekte — kaydır, zoom yap, cetvelle ölç.</p>
 
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          {[["editor", "Editör"], ["library", `Kayıtlı desenler (${savedList.length})`]].map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} style={{ ...btn, borderColor: view === v ? GOLD : LINE, color: view === v ? GOLD : TEXT, background: view === v ? "rgba(232,160,48,0.08)" : "transparent" }}>{l}</button>
+          ))}
+        </div>
+        {libMsg && <div style={{ fontSize: 12, color: TEAL, marginBottom: 12 }}>{libMsg}</div>}
+
+        {view === "editor" && (<>
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
           {[["single", "Tek yön (çizgi)"], ["check", "Dama / Ekose"]].map(([v, l]) => (
             <button key={v} onClick={() => setMode(v)} style={{ ...btn, borderColor: mode === v ? GOLD : LINE, color: mode === v ? GOLD : TEXT, background: mode === v ? "rgba(232,160,48,0.08)" : "transparent" }}>{l}</button>
@@ -788,8 +802,10 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
           ))}
         </div>
         )}
+        </>)}
 
-        {/* kayıtlı desenler */}
+        {/* kayıtlı desenler (ayrı sekme + akordiyon + arama) */}
+        {view === "library" && (
         <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 16, marginTop: 18 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -802,45 +818,61 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
               <input ref={importRef} type="file" accept="application/json,.json" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) importLibrary(f); e.target.value = ""; }} />
             </div>
           </div>
-          {libMsg && <div style={{ fontSize: 12, color: TEAL, marginBottom: 10 }}>{libMsg}</div>}
-          {savedList.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>Henüz kayıt yok. Kart veya editörden "Kaydet" ile ekle.</div>}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {savedList.map((d) => {
+          {savedList.length > 0 && (
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              <Search size={14} color={MUTE} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+              <input value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} placeholder="Desen adıyla ara…" style={{ width: "100%", boxSizing: "border-box", background: SUNK, border: `1px solid ${LINE}`, color: TEXT, borderRadius: 8, padding: "8px 32px", fontSize: 13 }} />
+              {librarySearch && <button onClick={() => setLibrarySearch("")} aria-label="Aramayı temizle" style={{ ...iconBtn, position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", padding: 4, border: "none", background: "transparent" }}><X size={14} /></button>}
+            </div>
+          )}
+          {savedList.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>Henüz kayıt yok. Editörden "Deseni kaydet" ile ekle.</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {shownDesigns.map((d) => {
               const totalEnds = d.ends.reduce((t, e) => t + e, 0);
               const active = activeDesignId === d.id;
+              const open = openDesigns.has(d.id);
+              const v0 = d.variants[0];
               return (
-                <div key={d.id} style={{ background: SUNK, border: `1px solid ${active ? GOLD : LINE}`, borderRadius: 12, padding: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                    <div>
+                <div key={d.id} style={{ background: SUNK, border: `1px solid ${active ? GOLD : LINE}`, borderRadius: 12, overflow: "hidden" }}>
+                  <div onClick={() => toggleOpen(d.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, cursor: "pointer", flexWrap: "wrap" }}>
+                    {open ? <ChevronDown size={16} color={MUTE} /> : <ChevronRight size={16} color={MUTE} />}
+                    <div style={{ width: 70, flexShrink: 0 }}><MiniStripe segments={d.ends.map((e, i) => ({ ends: e, color: v0.colors[i] }))} height={26} /></div>
+                    <div style={{ flex: 1, minWidth: 120 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{d.name}{active && <span style={{ fontSize: 10, color: GOLD, marginLeft: 6 }}>● aktif</span>}</div>
                       <div style={{ fontSize: 11, color: MUTE, marginTop: 2 }}>{new Date(d.date).toLocaleDateString("tr-TR")} · {totalEnds} tel · {d.variants.length} varyant</div>
                     </div>
-                    <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => renameDesignUI(d)} title="Deseni yeniden adlandır" style={{ ...iconBtn, padding: 7 }}><Pencil size={13} /></button>
                       <button onClick={() => addVariantTo(d)} title="Editördeki renkleri bu desene varyant olarak ekle" style={{ ...btn, padding: "6px 10px" }}><Plus size={14} /> Varyant ekle</button>
                       <button onClick={() => removeDesign(d.id)} title="Deseni sil" style={{ ...btn, padding: "6px 10px", color: RED }}><Trash2 size={14} /></button>
                     </div>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px,1fr))", gap: 10 }}>
-                    {d.variants.map((v) => (
-                      <div key={v.id} style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 10 }}>
-                        <MiniStripe segments={d.ends.map((e, i) => ({ ends: e, color: v.colors[i] }))} height={40} />
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v.name}</div>
-                          <button onClick={() => renameVariantUI(d, v)} title="Varyantı yeniden adlandır" style={{ ...iconBtn, padding: 4 }}><Pencil size={12} /></button>
-                        </div>
-                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                          <button onClick={() => loadVariant(d, v)} style={{ ...btn, flex: 1, padding: "6px 8px", borderColor: TEAL, color: TEAL }}>Yükle</button>
-                          <button onClick={() => removeVariant(d.id, v.id)} title="Varyantı sil" style={{ ...btn, padding: "6px 8px", color: RED }}><Trash2 size={13} /></button>
-                        </div>
+                  {open && (
+                    <div style={{ padding: "0 12px 12px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px,1fr))", gap: 10 }}>
+                        {d.variants.map((v) => (
+                          <div key={v.id} style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 10 }}>
+                            <MiniStripe segments={d.ends.map((e, i) => ({ ends: e, color: v.colors[i] }))} height={40} />
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v.name}</div>
+                              <button onClick={() => renameVariantUI(d, v)} title="Varyantı yeniden adlandır" style={{ ...iconBtn, padding: 4 }}><Pencil size={12} /></button>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                              <button onClick={() => loadVariant(d, v)} style={{ ...btn, flex: 1, padding: "6px 8px", borderColor: TEAL, color: TEAL }}>Yükle</button>
+                              <button onClick={() => removeVariant(d.id, v.id)} title="Varyantı sil" style={{ ...btn, padding: "6px 8px", color: RED }}><Trash2 size={13} /></button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
+            {savedList.length > 0 && shownDesigns.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>“{librarySearch}” için desen yok.</div>}
           </div>
         </div>
+        )}
       </div>
 
       {/* ayarlar paneli */}

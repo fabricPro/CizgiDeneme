@@ -738,8 +738,8 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
       )}
 
       <style>{`
-        @media (min-width: 880px){ .cd-grid{ grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items:start; } .gen-grid{ grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
-        @media (max-width: 879px){ .cd-preview{ order: -1; } }
+        @media (min-width: 880px){ .gen-grid{ grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
+        .cd-preview{ order: -1; }
         button:focus-visible, input:focus-visible, select:focus-visible{ outline:2px solid ${TEAL}; outline-offset:1px; }
         .spin{ animation: spin 0.9s linear infinite; } @keyframes spin{ to{ transform: rotate(360deg); } }
       `}</style>

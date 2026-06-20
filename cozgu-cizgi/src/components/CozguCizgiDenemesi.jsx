@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen } from "lucide-react";
 import { storage } from "../lib/storage";
 import { generateText } from "../lib/ai";
+import { listDesigns, saveDesign, deleteDesign } from "../lib/library";
 
 // DOM (inline style) renkleri — CSS değişkenleri (tema ile değişir)
 const GOLD = "var(--gold)";
@@ -56,6 +57,7 @@ export default function CozguCizgiDenemesi() {
   const [selectedId, setSelectedId] = useState(1);
   const [palette, setPalette] = useState(["#F4F1E8", "#EFE6D3", "#E5D9C3", "#DEC9A6", "#CFC3AE", "#BCAF99", "#A8967C", "#D6D8DA", "#C2C6C9", "#A6AAAD", "#7C8388", "#3C4248", "#1A1C1E", "#C9A24B", "#1F2A40", "#6E2230", "#1E5A62", "#8FA08A"]);
   const [copied, setCopied] = useState(false);
+  const [savedList, setSavedList] = useState(() => listDesigns()); // mount'ta localStorage'dan yükle (tema/ai state'leriyle aynı desen)
 
   // tema + ayarlar
   const [theme, setTheme] = useState(() => ls("ccd:theme", "dark"));
@@ -288,6 +290,26 @@ export default function CozguCizgiDenemesi() {
 
   const segmentsOf = (struct, colors) => struct.map((s) => ({ color: colors[s.role] ?? colors[0], ends: s.ends }));
 
+  // --- kayıtlı desen kütüphanesi (localStorage) ---
+  const persist = (name, segments) => {
+    if (!segments?.length) return;
+    saveDesign({ name, segments: segments.map(s => ({ color: s.color, ends: s.ends })),
+      warpDensity, weftDensity, fabricCm, mode, orientation });
+    setSavedList(listDesigns());
+  };
+  const saveCurrent = () => persist(prompt("Desen adı:", "Desen") || "Desen", warp);
+  const saveWay = (d, way) => persist(way.name || "Desen", segmentsOf(d.struct, way.colors));
+  const saveDesignAll = (d, di) => { d.ways.forEach(w => persist(`Desen ${di + 1} · ${w.name}`, segmentsOf(d.struct, w.colors))); };
+  const loadSaved = (rec) => {
+    setMode(rec.mode || "single"); setOrientation(rec.orientation || "h");
+    if (rec.warpDensity) setWarpDensity(rec.warpDensity);
+    if (rec.weftDensity) setWeftDensity(rec.weftDensity);
+    if (rec.fabricCm) setFabricCm(rec.fabricCm);
+    setWarp(rec.segments.map(s => ({ id: nextId++, color: s.color, ends: s.ends })));
+    setSelectedId(null);
+  };
+  const removeSaved = (id) => { deleteDesign(id); setSavedList(listDesigns()); };
+
   const buildDesignFromParsed = (parsed, N, G, K, grounds) => {
     if (!parsed || !parsed.str || !parsed.ways) return null;
     const rolesRaw = parsed.str.filter((x) => Array.isArray(x) && x.length >= 2 && x[1] > 0);
@@ -399,7 +421,10 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
           })}
         </div>
         <div style={{ fontSize: 11, color: MUTE, marginTop: 6 }}>{totalEndsW} tel · {d.K} bant · {d.G} zemin</div>
-        <button onClick={() => loadDesign(d, way)} style={{ ...btn, width: "100%", marginTop: 10, borderColor: TEAL, color: TEAL }}>Yükle <ArrowRight size={14} /></button>
+        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          <button onClick={() => loadDesign(d, way)} style={{ ...btn, flex: 1, borderColor: TEAL, color: TEAL }}>Yükle <ArrowRight size={14} /></button>
+          <button onClick={() => saveWay(d, way)} style={{ ...btn, flex: 1 }}><Save size={14} /> Kaydet</button>
+        </div>
       </div>
     );
   };
@@ -541,6 +566,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
               <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                 <button onClick={copySeq} style={{ ...btn, flex: 1 }}>{copied ? <Check size={15} color={TEAL} /> : <Copy size={15} />} {copied ? "Kopyalandı" : "Renk sırası"}</button>
                 <button onClick={downloadPng} style={{ ...btn, flex: 1, borderColor: GOLD, color: GOLD }}><Download size={15} /> PNG indir</button>
+                <button onClick={saveCurrent} style={{ ...btn, flex: 1 }}><Save size={15} /> Deseni kaydet</button>
               </div>
             </div>
 
@@ -624,7 +650,10 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
 
           {designs.map((d, di) => (
             <div key={di} style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${LINE}` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 10 }}>Desen {di + 1}</div>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: GOLD }}>Desen {di + 1}</div>
+                <button onClick={() => saveDesignAll(d, di)} style={{ ...btn, marginLeft: 8 }}><Save size={14} /> Tümünü kaydet</button>
+              </div>
               {renderWayCard(d, d.ways[0], "main", true)}
               {d.ways.length > 1 && (
                 <>
@@ -636,6 +665,28 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
               )}
             </div>
           ))}
+        </div>
+
+        {/* kayıtlı desenler */}
+        <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 16, marginTop: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <FolderOpen size={17} color={GOLD} />
+            <span style={{ fontSize: 14, fontWeight: 700 }}>Kayıtlı desenler ({savedList.length})</span>
+          </div>
+          {savedList.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>Henüz kayıt yok. Kart veya editörden "Kaydet" ile ekle.</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px,1fr))", gap: 12 }}>
+            {savedList.map((rec) => (
+              <div key={rec.id} style={{ background: SUNK, border: `1px solid ${LINE}`, borderRadius: 12, padding: 12 }}>
+                <MiniStripe segments={rec.segments} height={44} />
+                <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, marginTop: 8 }}>{rec.name}</div>
+                <div style={{ fontSize: 11, color: MUTE, marginTop: 3 }}>{new Date(rec.date).toLocaleDateString("tr-TR")} · {rec.segments.reduce((t, x) => t + x.ends, 0)} tel</div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <button onClick={() => loadSaved(rec)} style={{ ...btn, flex: 1, borderColor: TEAL, color: TEAL }}>Yükle</button>
+                  <button onClick={() => removeSaved(rec.id)} style={{ ...btn, color: RED }}><Trash2 size={14} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

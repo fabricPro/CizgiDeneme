@@ -21,8 +21,7 @@ const CANVAS = {
   light: { bg: "#FFFFFF", ruler: "rgba(240,236,226,0.92)", tick: "rgba(60,66,72,0.85)", tickLine: "rgba(60,66,72,0.5)", dash: "rgba(0,0,0,0.4)" },
 };
 
-const CARD_W = 8.56; // banka/kimlik kartı genişliği (cm, ISO ID-1)
-const CARD_H = 5.398;
+const RULER_CM = 10; // kalibrasyon referansı: ekrandaki cetvel uzunluğu (cm)
 
 const WARP_START = [
   { id: 1, color: "#EFE6D3", ends: 40 },
@@ -528,16 +527,29 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                   <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
                 </div>
                 {calibrating && (
-                  <div style={{ position: "absolute", inset: 0, background: "var(--scrim)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16, textAlign: "center" }}>
-                    <p style={{ fontSize: 13, color: TEXT, maxWidth: 360, margin: "0 0 14px", lineHeight: 1.5 }}>
-                      Gerçek bir banka/kimlik kartını ekrana koy. Kartın <b>genişliği</b> aşağıdaki dikdörtgenle <b>birebir</b> oturana kadar ayarla.
+                  <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--scrim)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16, textAlign: "center", overflow: "auto" }}>
+                    <p style={{ fontSize: 14, color: TEXT, maxWidth: 420, margin: "0 0 18px", lineHeight: 1.5 }}>
+                      Ekrana gerçek bir <b>cetvel</b> (ya da şerit metre) koy. Cetvelin <b>0–10 cm</b> arası aşağıdaki cetvelle <b>birebir</b> oturana kadar kaydırıcıyı ayarla.
                     </p>
-                    <div style={{ width: CARD_W * calPx, height: CARD_H * calPx, border: `2px solid ${GOLD}`, borderRadius: 8, background: "rgba(232,160,48,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: GOLD, fontSize: 12 }}>
-                      8,56 cm
+                    <div style={{ maxWidth: "100%", overflowX: "auto", padding: "0 8px" }}>
+                      <div style={{ position: "relative", width: RULER_CM * calPx, height: 46, margin: "0 auto" }}>
+                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: GOLD }} />
+                        {Array.from({ length: RULER_CM + 1 }, (_, i) => {
+                          const major = i % 5 === 0;
+                          return (
+                            <div key={i} style={{ position: "absolute", top: 0, left: i * calPx, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                              <div style={{ width: major ? 2 : 1, height: major ? 22 : 13, background: GOLD }} />
+                              {major && <div style={{ fontSize: 11, color: GOLD, fontWeight: 700, marginTop: 3 }}>{i}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <input type="range" min={24} max={120} step={0.2} value={calPx} onChange={(e) => setCalPx(parseFloat(e.target.value))} style={{ width: "80%", maxWidth: 360, marginTop: 18, accentColor: GOLD }} />
-                    <div style={{ fontSize: 12, color: MUTE, marginTop: 8 }}>{fmt(calPx)} px/cm</div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <div style={{ fontSize: 12, color: GOLD, fontWeight: 700, marginTop: 10 }}>10 cm</div>
+                    <input type="range" min={24} max={120} step={0.2} value={calPx} onChange={(e) => setCalPx(parseFloat(e.target.value))} style={{ width: "80%", maxWidth: 360, marginTop: 16, accentColor: GOLD }} />
+                    <div style={{ fontSize: 12, color: MUTE, marginTop: 8 }}>{fmt(calPx)} px/cm · 10 cm = {fmt(RULER_CM * calPx)} px</div>
+                    <div style={{ fontSize: 11, color: MUTE, marginTop: 6, maxWidth: 360 }}>İpucu: cetvel ekrana sığmıyorsa telefonu yatay çevir.</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                       <button onClick={() => setCalibrating(false)} style={btn}>İptal</button>
                       <button onClick={saveCalibration} style={{ ...btn, borderColor: GOLD, color: GOLD }}><Check size={15} /> Kaydet</button>
                     </div>

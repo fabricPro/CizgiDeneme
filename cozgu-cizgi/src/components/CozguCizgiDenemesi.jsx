@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload } from "lucide-react";
 import { storage } from "../lib/storage";
 import { generateText } from "../lib/ai";
-import { listDesigns, saveDesign, deleteDesign, exportDesigns, importDesigns } from "../lib/library";
+import { listDesigns, saveDesign, addVariant, deleteVariant, deleteDesign, exportDesigns, importDesigns } from "../lib/library";
 
 // DOM (inline style) renkleri — CSS değişkenleri (tema ile değişir)
 const GOLD = "var(--gold)";
@@ -58,6 +58,7 @@ export default function CozguCizgiDenemesi() {
   const [copied, setCopied] = useState(false);
   const [savedList, setSavedList] = useState(() => listDesigns()); // mount'ta localStorage'dan yükle (tema/ai state'leriyle aynı desen)
   const [libMsg, setLibMsg] = useState("");
+  const [activeDesignId, setActiveDesignId] = useState(null); // editörde yüklü/oluşturulmuş kayıtlı desen
 
   // tema + ayarlar
   const [theme, setTheme] = useState(() => ls("ccd:theme", "dark"));
@@ -291,25 +292,66 @@ export default function CozguCizgiDenemesi() {
 
   const segmentsOf = (struct, colors) => struct.map((s) => ({ color: colors[s.role] ?? colors[0], ends: s.ends }));
 
-  // --- kayıtlı desen kütüphanesi (localStorage) ---
-  const persist = (name, segments) => {
-    if (!segments?.length) return;
-    saveDesign({ name, segments: segments.map(s => ({ color: s.color, ends: s.ends })),
-      warpDensity, weftDensity, fabricCm, mode, orientation });
+  // --- kayıtlı desen kütüphanesi (localStorage): desen > varyant ---
+  const flash = (m, ms = 3500) => { setLibMsg(m); setTimeout(() => setLibMsg(""), ms); };
+  // editördeki warp'tan yeni desen (tek varyant)
+  const saveCurrent = () => {
+    if (!warp.length) return;
+    const name = prompt("Desen adı:", "Desen"); if (name === null) return;
+    const rec = saveDesign({
+      name: name || "Desen", ends: warp.map(s => s.ends),
+      warpDensity, weftDensity, fabricCm, mode, orientation,
+      variants: [{ name: "Varyant 1", colors: warp.map(s => s.color) }],
+    });
     setSavedList(listDesigns());
+    if (rec) { setActiveDesignId(rec.id); flash("Desen kaydedildi."); }
   };
-  const saveCurrent = () => persist(prompt("Desen adı:", "Desen") || "Desen", warp);
-  const saveWay = (d, way) => persist(way.name || "Desen", segmentsOf(d.struct, way.colors));
-  const saveDesignAll = (d, di) => { d.ways.forEach(w => persist(`Desen ${di + 1} · ${w.name}`, segmentsOf(d.struct, w.colors))); };
-  const loadSaved = (rec) => {
-    setMode(rec.mode || "single"); setOrientation(rec.orientation || "h");
-    if (rec.warpDensity) setWarpDensity(rec.warpDensity);
-    if (rec.weftDensity) setWeftDensity(rec.weftDensity);
-    if (rec.fabricCm) setFabricCm(rec.fabricCm);
-    setWarp(rec.segments.map(s => ({ id: nextId++, color: s.color, ends: s.ends })));
+  // editör renklerini bir desene varyant olarak ekle (aynı yapı şartı)
+  const addVariantTo = (d) => {
+    if (!d) return;
+    if (warp.length !== d.ends.length) {
+      flash(`"${d.name}" ${d.ends.length} çizgili; varyant için editörde aynı sayıda çizgi olmalı (şu an ${warp.length}).`, 5000);
+      return;
+    }
+    setSavedList(addVariant(d.id, { colors: warp.map(s => s.color) }));
+    setActiveDesignId(d.id);
+    flash("Varyant eklendi.");
+  };
+  // AI üretici: tek yol → tek-varyantlı desen
+  const saveWay = (d, way) => {
+    const rec = saveDesign({
+      name: way.name || "Desen", ends: d.struct.map(s => s.ends),
+      warpDensity, weftDensity, fabricCm, mode, orientation,
+      variants: [{ name: way.name || "Varyant 1", colors: segmentsOf(d.struct, way.colors).map(s => s.color) }],
+    });
+    setSavedList(listDesigns());
+    if (rec) { setActiveDesignId(rec.id); flash("Desen kaydedildi."); }
+  };
+  // AI üretici: tüm yollar → tek desen, yollar varyant
+  const saveDesignAll = (d, di) => {
+    const rec = saveDesign({
+      name: `Desen ${di + 1}`, ends: d.struct.map(s => s.ends),
+      warpDensity, weftDensity, fabricCm, mode, orientation,
+      variants: d.ways.map(w => ({ name: w.name, colors: segmentsOf(d.struct, w.colors).map(s => s.color) })),
+    });
+    setSavedList(listDesigns());
+    if (rec) { setActiveDesignId(rec.id); flash(`${d.ways.length} varyantlı desen kaydedildi.`); }
+  };
+  const loadVariant = (d, v) => {
+    setMode(d.mode || "single"); setOrientation(d.orientation || "h");
+    if (d.warpDensity) setWarpDensity(d.warpDensity);
+    if (d.weftDensity) setWeftDensity(d.weftDensity);
+    if (d.fabricCm) setFabricCm(d.fabricCm);
+    setWarp(d.ends.map((e, i) => ({ id: nextId++, color: v.colors[i], ends: e })));
     setSelectedId(null);
+    setActiveDesignId(d.id);
   };
-  const removeSaved = (id) => { deleteDesign(id); setSavedList(listDesigns()); };
+  const removeDesign = (id) => { setSavedList(deleteDesign(id)); if (activeDesignId === id) setActiveDesignId(null); };
+  const removeVariant = (designId, vId) => {
+    const list = deleteVariant(designId, vId);
+    setSavedList(list);
+    if (activeDesignId === designId && !list.find(x => x.id === designId)) setActiveDesignId(null);
+  };
   const exportLibrary = () => {
     const blob = new Blob([exportDesigns()], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -416,6 +458,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
     const segs = d.struct.map((s) => ({ id: nextId++, color: way.colors[s.role] ?? way.colors[0], ends: s.ends }));
     setWarp(segs); setSelectedId(segs[0]?.id ?? null);
     setFabricCm(Math.max(fabricCm, Math.round((d.struct.reduce((t, x) => t + x.ends, 0) / warpDensity) * 100) / 100));
+    setActiveDesignId(null); // üretici önizlemesi; henüz kayıtlı bir desen değil
   };
 
   const renderWayCard = (d, way, key, big) => {
@@ -592,10 +635,13 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                 <Stat label="Rapor eni" value={`${fmt(repeatCm)} cm`} accent={TEAL} />
                 <Stat label="Ende rapor" value={`${fmt(repeats)}×`} accent={TEXT} />
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                <button onClick={copySeq} style={{ ...btn, flex: 1 }}>{copied ? <Check size={15} color={TEAL} /> : <Copy size={15} />} {copied ? "Kopyalandı" : "Renk sırası"}</button>
-                <button onClick={downloadPng} style={{ ...btn, flex: 1, borderColor: GOLD, color: GOLD }}><Download size={15} /> PNG indir</button>
-                <button onClick={saveCurrent} style={{ ...btn, flex: 1 }}><Save size={15} /> Deseni kaydet</button>
+              <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                <button onClick={copySeq} style={{ ...btn, flex: 1, minWidth: 120 }}>{copied ? <Check size={15} color={TEAL} /> : <Copy size={15} />} {copied ? "Kopyalandı" : "Renk sırası"}</button>
+                <button onClick={downloadPng} style={{ ...btn, flex: 1, minWidth: 120, borderColor: GOLD, color: GOLD }}><Download size={15} /> PNG indir</button>
+                <button onClick={saveCurrent} style={{ ...btn, flex: 1, minWidth: 120 }}><Save size={15} /> Deseni kaydet</button>
+                {activeDesignId && savedList.some(x => x.id === activeDesignId) && (
+                  <button onClick={() => addVariantTo(savedList.find(x => x.id === activeDesignId))} style={{ ...btn, flex: 1, minWidth: 120, borderColor: TEAL, color: TEAL }}><Plus size={15} /> Varyant olarak kaydet</button>
+                )}
               </div>
             </div>
 
@@ -711,18 +757,37 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
           </div>
           {libMsg && <div style={{ fontSize: 12, color: TEAL, marginBottom: 10 }}>{libMsg}</div>}
           {savedList.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>Henüz kayıt yok. Kart veya editörden "Kaydet" ile ekle.</div>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px,1fr))", gap: 12 }}>
-            {savedList.map((rec) => (
-              <div key={rec.id} style={{ background: SUNK, border: `1px solid ${LINE}`, borderRadius: 12, padding: 12 }}>
-                <MiniStripe segments={rec.segments} height={44} />
-                <div style={{ fontSize: 13, fontWeight: 600, color: TEXT, marginTop: 8 }}>{rec.name}</div>
-                <div style={{ fontSize: 11, color: MUTE, marginTop: 3 }}>{new Date(rec.date).toLocaleDateString("tr-TR")} · {rec.segments.reduce((t, x) => t + x.ends, 0)} tel</div>
-                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                  <button onClick={() => loadSaved(rec)} style={{ ...btn, flex: 1, borderColor: TEAL, color: TEAL }}>Yükle</button>
-                  <button onClick={() => removeSaved(rec.id)} style={{ ...btn, color: RED }}><Trash2 size={14} /></button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {savedList.map((d) => {
+              const totalEnds = d.ends.reduce((t, e) => t + e, 0);
+              const active = activeDesignId === d.id;
+              return (
+                <div key={d.id} style={{ background: SUNK, border: `1px solid ${active ? GOLD : LINE}`, borderRadius: 12, padding: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{d.name}{active && <span style={{ fontSize: 10, color: GOLD, marginLeft: 6 }}>● aktif</span>}</div>
+                      <div style={{ fontSize: 11, color: MUTE, marginTop: 2 }}>{new Date(d.date).toLocaleDateString("tr-TR")} · {totalEnds} tel · {d.variants.length} varyant</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => addVariantTo(d)} title="Editördeki renkleri bu desene varyant olarak ekle" style={{ ...btn, padding: "6px 10px" }}><Plus size={14} /> Varyant ekle</button>
+                      <button onClick={() => removeDesign(d.id)} title="Deseni sil" style={{ ...btn, padding: "6px 10px", color: RED }}><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px,1fr))", gap: 10 }}>
+                    {d.variants.map((v) => (
+                      <div key={v.id} style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 10, padding: 10 }}>
+                        <MiniStripe segments={d.ends.map((e, i) => ({ ends: e, color: v.colors[i] }))} height={40} />
+                        <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.name}</div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button onClick={() => loadVariant(d, v)} style={{ ...btn, flex: 1, padding: "6px 8px", borderColor: TEAL, color: TEAL }}>Yükle</button>
+                          <button onClick={() => removeVariant(d.id, v.id)} title="Varyantı sil" style={{ ...btn, padding: "6px 8px", color: RED }}><Trash2 size={13} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

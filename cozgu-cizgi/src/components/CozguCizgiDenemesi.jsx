@@ -573,6 +573,20 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
           ))}
         </div>
         {libMsg && <div style={{ fontSize: 12, color: TEAL, marginBottom: 12 }}>{libMsg}</div>}
+        {(() => {
+          const ad = activeDesignId && activeVariantId && savedList.find(x => x.id === activeDesignId);
+          const av = ad && ad.variants.find(v => v.id === activeVariantId);
+          if (!ad || !av) return null;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: "rgba(232,160,48,0.08)", border: `1px solid ${GOLD}`, borderRadius: 8, padding: "6px 10px", marginBottom: 12 }}>
+              <Pencil size={13} color={GOLD} />
+              <span style={{ fontSize: 12, color: MUTE }}>Düzenlenen:</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: GOLD }}>{ad.name}</span>
+              <span style={{ fontSize: 12, color: MUTE }}>·</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{av.name}</span>
+            </div>
+          );
+        })()}
 
         {view === "editor" && (<>
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -778,6 +792,40 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* editör sağ: hızlı kütüphane (yalnız geniş ekran) */}
+          <div className="cd-library" style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <FolderOpen size={15} color={GOLD} />
+                <span style={{ fontSize: 13, fontWeight: 700 }}>Desenler ({savedList.length})</span>
+              </div>
+              <button onClick={() => setView("library")} style={{ ...btn, padding: "4px 8px", fontSize: 12 }} title="Tüm desenler ve yönetim">Tümü <ArrowRight size={12} /></button>
+            </div>
+            {savedList.length > 3 && (
+              <div style={{ position: "relative", marginBottom: 8 }}>
+                <Search size={13} color={MUTE} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+                <input value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} placeholder="Ara…" style={{ width: "100%", boxSizing: "border-box", background: SUNK, border: `1px solid ${LINE}`, color: TEXT, borderRadius: 8, padding: "6px 8px 6px 28px", fontSize: 12 }} />
+              </div>
+            )}
+            {savedList.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>Henüz kayıt yok.</div>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 460, overflowY: "auto" }}>
+              {shownDesigns.map((d) => {
+                const v0 = d.variants[0];
+                const active = activeDesignId === d.id;
+                return (
+                  <div key={d.id} onClick={() => loadVariant(d, v0)} title="Bu deseni yükle (ilk varyant)" style={{ display: "flex", alignItems: "center", gap: 8, background: SUNK, border: `1px solid ${active ? GOLD : LINE}`, borderRadius: 10, padding: 8, cursor: "pointer" }}>
+                    <div style={{ width: 54, flexShrink: 0 }}><MiniStripe segments={d.ends.map((e, i) => ({ ends: e, color: v0.colors[i] }))} height={24} /></div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                      <div style={{ fontSize: 10, color: MUTE }}>{d.variants.length} varyant{active ? " · aktif" : ""}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              {savedList.length > 0 && shownDesigns.length === 0 && <div style={{ fontSize: 11, color: MUTE }}>Eşleşen desen yok.</div>}
             </div>
           </div>
         </div>
@@ -988,6 +1036,13 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
       <style>{`
         @media (min-width: 880px){ .gen-grid{ grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
         .cd-preview{ order: -1; }
+        .cd-library{ display: none; }
+        @media (min-width: 980px){
+          .cd-grid{ grid-template-columns: minmax(0,1fr) 290px; align-items: start; }
+          .cd-preview{ grid-column: 1; grid-row: 1; }
+          .cd-controls{ grid-column: 1; grid-row: 2; }
+          .cd-library{ display: block; grid-column: 2; grid-row: 1 / span 2; align-self: start; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+        }
         button:focus-visible, input:focus-visible, select:focus-visible{ outline:2px solid ${TEAL}; outline-offset:1px; }
         .spin{ animation: spin 0.9s linear infinite; } @keyframes spin{ to{ transform: rotate(360deg); } }
       `}</style>

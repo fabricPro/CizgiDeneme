@@ -62,6 +62,7 @@ export default function CozguCizgiDenemesi() {
   const [activeDesignId, setActiveDesignId] = useState(null); // editörde yüklü/oluşturulmuş kayıtlı desen
   const [activeVariantId, setActiveVariantId] = useState(null); // üzerine kaydetmek için yüklü varyant
   const [view, setView] = useState("editor"); // "editor" | "library" (üst sekme)
+  const [libraryOpen, setLibraryOpen] = useState(false); // editörde sağ açılır kütüphane çekmecesi
   const [librarySearch, setLibrarySearch] = useState("");
   const [openDesigns, setOpenDesigns] = useState(() => new Set()); // akordiyonda açık desenler
 
@@ -560,7 +561,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "20px 16px 40px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>Çizgi Similatör</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>Çizgi Simülatör</h1>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: GOLD }} />
           </div>
           <button onClick={() => setShowSettings(true)} title="Ayarlar" aria-label="Ayarlar" style={{ ...iconBtn, padding: 9 }}><Settings size={18} /></button>
@@ -794,40 +795,6 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
               </div>
             </div>
           </div>
-
-          {/* editör sağ: hızlı kütüphane (yalnız geniş ekran) */}
-          <div className="cd-library" style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <FolderOpen size={15} color={GOLD} />
-                <span style={{ fontSize: 13, fontWeight: 700 }}>Desenler ({savedList.length})</span>
-              </div>
-              <button onClick={() => setView("library")} style={{ ...btn, padding: "4px 8px", fontSize: 12 }} title="Tüm desenler ve yönetim">Tümü <ArrowRight size={12} /></button>
-            </div>
-            {savedList.length > 3 && (
-              <div style={{ position: "relative", marginBottom: 8 }}>
-                <Search size={13} color={MUTE} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-                <input value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} placeholder="Ara…" style={{ width: "100%", boxSizing: "border-box", background: SUNK, border: `1px solid ${LINE}`, color: TEXT, borderRadius: 8, padding: "6px 8px 6px 28px", fontSize: 12 }} />
-              </div>
-            )}
-            {savedList.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>Henüz kayıt yok.</div>}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 460, overflowY: "auto" }}>
-              {shownDesigns.map((d) => {
-                const v0 = d.variants[0];
-                const active = activeDesignId === d.id;
-                return (
-                  <div key={d.id} onClick={() => loadVariant(d, v0)} title="Bu deseni yükle (ilk varyant)" style={{ display: "flex", alignItems: "center", gap: 8, background: SUNK, border: `1px solid ${active ? GOLD : LINE}`, borderRadius: 10, padding: 8, cursor: "pointer" }}>
-                    <div style={{ width: 54, flexShrink: 0 }}><MiniStripe segments={d.ends.map((e, i) => ({ ends: e, color: v0.colors[i] }))} height={24} /></div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
-                      <div style={{ fontSize: 10, color: MUTE }}>{d.variants.length} varyant{active ? " · aktif" : ""}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              {savedList.length > 0 && shownDesigns.length === 0 && <div style={{ fontSize: 11, color: MUTE }}>Eşleşen desen yok.</div>}
-            </div>
-          </div>
         </div>
 
         {/* akıllı desen üretici (Ayarlar'dan aç/kapat) */}
@@ -979,6 +946,50 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
         )}
       </div>
 
+      {/* editör: hızlı kütüphane çekmecesi (önizlemeyi daraltmaz) */}
+      {view === "editor" && !libraryOpen && (
+        <button onClick={() => setLibraryOpen(true)} title="Kayıtlı desenler" style={{ position: "fixed", right: 0, top: 150, zIndex: 54, display: "flex", alignItems: "center", gap: 6, background: PANEL, border: `1px solid ${LINE}`, borderRight: "none", borderRadius: "10px 0 0 10px", padding: "10px 12px", cursor: "pointer", color: GOLD, boxShadow: "-2px 2px 12px rgba(0,0,0,0.35)" }}>
+          <FolderOpen size={16} /><span style={{ fontSize: 12, fontWeight: 700 }}>{savedList.length}</span>
+        </button>
+      )}
+      {libraryOpen && (
+        <div onClick={() => setLibraryOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 56, background: "rgba(0,0,0,0.4)" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "min(330px, 92vw)", background: PANEL, borderLeft: `1px solid ${LINE}`, padding: 14, overflowY: "auto", boxShadow: "-8px 0 28px rgba(0,0,0,0.45)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <FolderOpen size={16} color={GOLD} />
+                <span style={{ fontSize: 14, fontWeight: 700 }}>Kayıtlı desenler ({savedList.length})</span>
+              </div>
+              <button onClick={() => setLibraryOpen(false)} aria-label="Kapat" style={iconBtn}><X size={16} /></button>
+            </div>
+            <button onClick={() => { setView("library"); setLibraryOpen(false); }} style={{ ...btn, width: "100%", padding: "6px 10px", fontSize: 12, marginBottom: 10 }}>Tüm yönetim (sekme) <ArrowRight size={13} /></button>
+            {savedList.length > 3 && (
+              <div style={{ position: "relative", marginBottom: 10 }}>
+                <Search size={13} color={MUTE} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+                <input value={librarySearch} onChange={(e) => setLibrarySearch(e.target.value)} placeholder="Desen adıyla ara…" style={{ width: "100%", boxSizing: "border-box", background: SUNK, border: `1px solid ${LINE}`, color: TEXT, borderRadius: 8, padding: "7px 8px 7px 28px", fontSize: 12 }} />
+              </div>
+            )}
+            {savedList.length === 0 && <div style={{ fontSize: 12, color: MUTE }}>Henüz kayıt yok. Editörden "Deseni kaydet" ile ekle.</div>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {shownDesigns.map((d) => {
+                const v0 = d.variants[0];
+                const active = activeDesignId === d.id;
+                return (
+                  <div key={d.id} onClick={() => { loadVariant(d, v0); setLibraryOpen(false); }} title="Bu deseni yükle (ilk varyant)" style={{ display: "flex", alignItems: "center", gap: 8, background: SUNK, border: `1px solid ${active ? GOLD : LINE}`, borderRadius: 10, padding: 8, cursor: "pointer" }}>
+                    <div style={{ width: 60, flexShrink: 0 }}><MiniStripe segments={d.ends.map((e, i) => ({ ends: e, color: v0.colors[i] }))} height={26} /></div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                      <div style={{ fontSize: 10, color: MUTE }}>{d.variants.length} varyant{active ? " · aktif" : ""}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              {savedList.length > 0 && shownDesigns.length === 0 && <div style={{ fontSize: 11, color: MUTE }}>Eşleşen desen yok.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ayarlar paneli */}
       {showSettings && (
         <div onClick={() => setShowSettings(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, zIndex: 50, overflowY: "auto" }}>
@@ -1036,13 +1047,6 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
       <style>{`
         @media (min-width: 880px){ .gen-grid{ grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
         .cd-preview{ order: -1; }
-        .cd-library{ display: none; }
-        @media (min-width: 980px){
-          .cd-grid{ grid-template-columns: minmax(0,1fr) 290px; align-items: start; }
-          .cd-preview{ grid-column: 1; grid-row: 1; }
-          .cd-controls{ grid-column: 1; grid-row: 2; }
-          .cd-library{ display: block; grid-column: 2; grid-row: 1 / span 2; align-self: start; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
-        }
         button:focus-visible, input:focus-visible, select:focus-visible{ outline:2px solid ${TEAL}; outline-offset:1px; }
         .spin{ animation: spin 0.9s linear infinite; } @keyframes spin{ to{ transform: rotate(360deg); } }
       `}</style>

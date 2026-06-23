@@ -1,4 +1,4 @@
-# Çizgi Similatör
+# Çizgi Simülatör
 
 Perdelik **çözgü çizgi** tasarım ve **1:1 simülatör** aracı — tamamen bağımsız, backend'siz bir
 PWA. Tüm mantık tarayıcıda çalışır, veriler cihazda (`localStorage`) saklanır.

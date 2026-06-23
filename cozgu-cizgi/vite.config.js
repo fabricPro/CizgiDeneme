@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "icon-192.png", "icon-512.png"],
       manifest: {
-        name: "Çizgi Similatör",
-        short_name: "Similatör",
+        name: "Çizgi Simülatör",
+        short_name: "Simülatör",
         description: "Perdelik çözgü çizgi tasarım ve 1:1 simülatör aracı",
         lang: "tr",
         theme_color: "#0D1B2A",

@@ -1,6 +1,6 @@
-# Çözgü Çizgi Denemesi
+# Çizgi Similatör
 
-Perdelik **çözgü çizgi** tasarım ve **1:1 önizleme** aracı — tamamen bağımsız, backend'siz bir
+Perdelik **çözgü çizgi** tasarım ve **1:1 simülatör** aracı — tamamen bağımsız, backend'siz bir
 PWA. Tüm mantık tarayıcıda çalışır, veriler cihazda (`localStorage`) saklanır.
 
 - **Manuel araç** internetsiz çalışır: çizgi editörü, kalibrasyon (gerçek 1:1 ölçek), çözgü

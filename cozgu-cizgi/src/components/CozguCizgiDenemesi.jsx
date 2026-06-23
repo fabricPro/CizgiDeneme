@@ -560,7 +560,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "20px 16px 40px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>Çözgü Çizgi Denemesi</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>Çizgi Similatör</h1>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: GOLD }} />
           </div>
           <button onClick={() => setShowSettings(true)} title="Ayarlar" aria-label="Ayarlar" style={{ ...iconBtn, padding: 9 }}><Settings size={18} /></button>

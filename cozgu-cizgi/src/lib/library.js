@@ -83,6 +83,25 @@ export function deleteVariant(designId, variantId) {
 
 export function deleteDesign(designId) { const all = listDesigns().filter(d => d.id !== designId); write(all); return all; }
 export function renameDesign(designId, name) { const all = listDesigns().map(d => d.id === designId ? { ...d, name } : d); write(all); return all; }
+// yüklü varyantı üzerine kaydet: yapı (ends/tags) paylaşıldığı için değişirse tüm varyantlar hizalanır
+export function updateVariant(designId, variantId, { ends, tags, colors } = {}) {
+  const all = listDesigns();
+  const d = all.find(x => x.id === designId);
+  if (!d) return all;
+  const tgt = d.variants.find(x => x.id === variantId);
+  if (!tgt) return all;
+  if (Array.isArray(ends) && ends.length) {
+    const ne = ends.map(n => Math.max(0, Math.round(Number(n) || 0)));
+    d.ends = ne;
+    d.tags = ne.map((_, i) => String((Array.isArray(tags) ? tags[i] : d.tags?.[i]) ?? ""));
+    d.variants = d.variants.map(v => ({ ...v, colors: ne.map((_, i) => String(v.colors[i] ?? v.colors[v.colors.length - 1] ?? "#cccccc")) }));
+  }
+  if (Array.isArray(colors)) {
+    const t2 = d.variants.find(x => x.id === variantId); // ends bloğu varyantları yeniden oluşturmuş olabilir
+    if (t2) t2.colors = d.ends.map((_, i) => String(colors[i] ?? "#cccccc"));
+  }
+  write(all); return all;
+}
 export function renameVariant(designId, variantId, name) {
   const all = listDesigns();
   const d = all.find(x => x.id === designId);

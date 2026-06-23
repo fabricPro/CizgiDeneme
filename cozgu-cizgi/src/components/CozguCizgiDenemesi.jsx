@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload, Pencil, FilePlus, Layers, ChevronDown, ChevronRight, Search, FlipHorizontal2, Maximize2 } from "lucide-react";
+import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload, Pencil, FilePlus, Layers, ChevronDown, ChevronRight, Search, FlipHorizontal2, FlipVertical2, Maximize2 } from "lucide-react";
 import { storage } from "../lib/storage";
 import { generateText } from "../lib/ai";
-import { listDesigns, saveDesign, addVariant, deleteVariant, deleteDesign, renameDesign, renameVariant, exportDesigns, importDesigns } from "../lib/library";
+import { listDesigns, saveDesign, addVariant, updateVariant, deleteVariant, deleteDesign, renameDesign, renameVariant, exportDesigns, importDesigns } from "../lib/library";
 
 // DOM (inline style) renkleri — CSS değişkenleri (tema ile değişir)
 const GOLD = "var(--gold)";
@@ -60,6 +60,7 @@ export default function CozguCizgiDenemesi() {
   const [savedList, setSavedList] = useState(() => listDesigns()); // mount'ta localStorage'dan yükle (tema/ai state'leriyle aynı desen)
   const [libMsg, setLibMsg] = useState("");
   const [activeDesignId, setActiveDesignId] = useState(null); // editörde yüklü/oluşturulmuş kayıtlı desen
+  const [activeVariantId, setActiveVariantId] = useState(null); // üzerine kaydetmek için yüklü varyant
   const [view, setView] = useState("editor"); // "editor" | "library" (üst sekme)
   const [librarySearch, setLibrarySearch] = useState("");
   const [openDesigns, setOpenDesigns] = useState(() => new Set()); // akordiyonda açık desenler
@@ -100,6 +101,8 @@ export default function CozguCizgiDenemesi() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [reportMode, setReportMode] = useState("repeat"); // "repeat" | "unit" (tekrarlı / birim rapor)
   const [fullscreen, setFullscreen] = useState(false); // simülatör tam ekran
+  const [flipX, setFlipX] = useState(false); // simülatör görsel ayna (yatay) — sadece görüntü
+  const [flipY, setFlipY] = useState(false); // simülatör görsel ayna (dikey) — sadece görüntü
   useEffect(() => {
     if (!fullscreen) return;
     document.body.style.overflow = "hidden";
@@ -181,6 +184,11 @@ export default function CozguCizgiDenemesi() {
     if (unit <= 0) return;
     const unitMode = reportMode === "unit"; // birim rapor: tek tekrar göster
 
+    // görsel aynalama (yalnız desen katmanı; cetvel okunur kalsın diye save/restore içinde)
+    ctx.save();
+    if (flipX) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+    if (flipY) { ctx.translate(0, H); ctx.scale(1, -1); }
+
     // bant ekseninde döşeme (modulo ile sanal): pan kadar kaydır
     const tileX = (segs, repPx, panX, drawSeg) => {
       if (repPx <= 0) return;
@@ -240,8 +248,9 @@ export default function CozguCizgiDenemesi() {
       drawDashed(ctx, repPx, panV, horizontal, W, H, cv);
     }
 
+    ctx.restore(); // aynalama bitti; cetvel normal çizilir
     drawRuler(ctx, W, H, unit, pan.x, cv);
-  }, [warp, weft, warpDensity, weftDensity, designDensity, fabricCm, mode, orientation, unit, pan, repeatEnds, cv, reportMode]);
+  }, [warp, weft, warpDensity, weftDensity, designDensity, fabricCm, mode, orientation, unit, pan, repeatEnds, cv, reportMode, flipX, flipY]);
 
   useEffect(() => {
     draw();
@@ -292,7 +301,7 @@ export default function CozguCizgiDenemesi() {
   const clearChecks = () => setCheckedIds(new Set());
   const addToPalette = () => { const cur = [...warp, ...weft].find((x) => x.id === selectedId)?.color; if (cur && !palette.includes(cur)) setPalette((p) => [...p, cur]); };
   const reset = () => { setWarp(clone(WARP_START)); setWeft(clone(WEFT_START)); setSelectedId(null); setCheckedIds(new Set()); };
-  const newDesign = () => { setWarp([]); setWeft([]); setSelectedId(null); setCheckedIds(new Set()); setMode("single"); setOrientation("v"); setActiveDesignId(null); };
+  const newDesign = () => { setWarp([]); setWeft([]); setSelectedId(null); setCheckedIds(new Set()); setMode("single"); setOrientation("v"); setActiveDesignId(null); setActiveVariantId(null); };
 
   // --- akıllı desen üretici ---
   const fitTo = (segs, N) => {
@@ -335,7 +344,7 @@ export default function CozguCizgiDenemesi() {
       variants: [{ name: "Varyant 1", colors: warp.map(s => s.color) }],
     });
     setSavedList(listDesigns());
-    if (rec) { setActiveDesignId(rec.id); flash("Desen kaydedildi."); }
+    if (rec) { setActiveDesignId(rec.id); setActiveVariantId(rec.variants[0]?.id || null); flash("Desen kaydedildi."); }
   };
   // editör renklerini bir desene varyant olarak ekle (aynı yapı şartı)
   const addVariantTo = (d) => {
@@ -344,9 +353,19 @@ export default function CozguCizgiDenemesi() {
       flash(`"${d.name}" ${d.ends.length} çizgili; varyant için editörde aynı sayıda çizgi olmalı (şu an ${warp.length}).`, 5000);
       return;
     }
-    setSavedList(addVariant(d.id, { colors: warp.map(s => s.color) }));
+    const list = addVariant(d.id, { colors: warp.map(s => s.color) });
+    setSavedList(list);
     setActiveDesignId(d.id);
+    setActiveVariantId(list.find(x => x.id === d.id)?.variants.slice(-1)[0]?.id || null);
     flash("Varyant eklendi.");
+  };
+  // yüklü varyantın üzerine kaydet (yeni varyant açmadan)
+  const saveOverVariant = () => {
+    const d = savedList.find(x => x.id === activeDesignId);
+    const v = d?.variants.find(x => x.id === activeVariantId);
+    if (!d || !v || !warp.length) return;
+    setSavedList(updateVariant(d.id, v.id, { ends: warp.map(s => s.ends), tags: warp.map(s => s.tag || ""), colors: warp.map(s => s.color) }));
+    flash("Üzerine kaydedildi.");
   };
   // AI üretici: tek yol → tek-varyantlı desen
   const saveWay = (d, way) => {
@@ -357,7 +376,7 @@ export default function CozguCizgiDenemesi() {
       variants: [{ name: way.name || "Varyant 1", colors: segmentsOf(d.struct, way.colors).map(s => s.color) }],
     });
     setSavedList(listDesigns());
-    if (rec) { setActiveDesignId(rec.id); flash("Desen kaydedildi."); }
+    if (rec) { setActiveDesignId(rec.id); setActiveVariantId(rec.variants[0]?.id || null); flash("Desen kaydedildi."); }
   };
   // AI üretici: tüm yollar → tek desen, yollar varyant
   const saveDesignAll = (d, di) => {
@@ -368,7 +387,7 @@ export default function CozguCizgiDenemesi() {
       variants: d.ways.map(w => ({ name: w.name, colors: segmentsOf(d.struct, w.colors).map(s => s.color) })),
     });
     setSavedList(listDesigns());
-    if (rec) { setActiveDesignId(rec.id); flash(`${d.ways.length} varyantlı desen kaydedildi.`); }
+    if (rec) { setActiveDesignId(rec.id); setActiveVariantId(rec.variants[0]?.id || null); flash(`${d.ways.length} varyantlı desen kaydedildi.`); }
   };
   const loadVariant = (d, v) => {
     setMode(d.mode || "single"); setOrientation(d.orientation || "v");
@@ -377,17 +396,18 @@ export default function CozguCizgiDenemesi() {
     if (d.fabricCm) setFabricCm(d.fabricCm);
     setWarp(d.ends.map((e, i) => ({ id: nextId++, color: v.colors[i], ends: e, tag: (d.tags && d.tags[i]) || "" })));
     setSelectedId(null); setCheckedIds(new Set());
-    setActiveDesignId(d.id);
+    setActiveDesignId(d.id); setActiveVariantId(v.id);
     setView("editor"); // yükleyince editöre dön
   };
   const toggleOpen = (id) => setOpenDesigns((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const shownDesigns = librarySearch.trim() ? savedList.filter((d) => (d.name || "").toLowerCase().includes(librarySearch.trim().toLowerCase())) : savedList;
   const renameDesignUI = (d) => { const n = prompt("Desen adı:", d.name); if (n != null && n.trim()) setSavedList(renameDesign(d.id, n.trim())); };
   const renameVariantUI = (d, v) => { const n = prompt("Varyant adı:", v.name); if (n != null && n.trim()) setSavedList(renameVariant(d.id, v.id, n.trim())); };
-  const removeDesign = (id) => { setSavedList(deleteDesign(id)); if (activeDesignId === id) setActiveDesignId(null); };
+  const removeDesign = (id) => { setSavedList(deleteDesign(id)); if (activeDesignId === id) { setActiveDesignId(null); setActiveVariantId(null); } };
   const removeVariant = (designId, vId) => {
     const list = deleteVariant(designId, vId);
     setSavedList(list);
+    if (activeVariantId === vId) setActiveVariantId(null);
     if (activeDesignId === designId && !list.find(x => x.id === designId)) setActiveDesignId(null);
   };
   const exportLibrary = () => {
@@ -664,6 +684,8 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                     {[["repeat", "Tekrarlı"], ["unit", "Birim"]].map(([v, l]) => (
                       <button key={v} onClick={() => setReportMode(v)} style={{ ...btn, padding: "6px 12px", background: reportMode === v ? "rgba(232,160,48,0.18)" : PANEL, borderColor: reportMode === v ? GOLD : LINE, color: reportMode === v ? GOLD : TEXT }}>{l}</button>
                     ))}
+                    <button onClick={() => setFlipX((f) => !f)} style={{ ...iconBtn, background: PANEL, borderColor: flipX ? GOLD : LINE, color: flipX ? GOLD : "#fff" }} title="Görseli yatay aynala"><FlipHorizontal2 size={16} /></button>
+                    <button onClick={() => setFlipY((f) => !f)} style={{ ...iconBtn, background: PANEL, borderColor: flipY ? GOLD : LINE, color: flipY ? GOLD : "#fff" }} title="Görseli dikey aynala"><FlipVertical2 size={16} /></button>
                     <button onClick={() => setFullscreen(false)} style={{ ...btn, marginLeft: "auto", background: PANEL, borderColor: GOLD, color: GOLD }}><X size={16} /> Kapat</button>
                   </div>
                 )}
@@ -706,6 +728,8 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                 <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} style={btn} title="Gerçek boyut">1:1</button>
                 <button onClick={fitWidth} style={btn} title="Tümünü sığdır"><Maximize size={15} /> Sığdır</button>
                 <button onClick={() => setFullscreen(true)} style={btn} title="Simülatörü tam ekran aç"><Maximize2 size={15} /> Tam ekran</button>
+                <button onClick={() => setFlipX((f) => !f)} style={{ ...iconBtn, borderColor: flipX ? GOLD : LINE, color: flipX ? GOLD : TEXT }} title="Görseli yatay aynala"><FlipHorizontal2 size={16} /></button>
+                <button onClick={() => setFlipY((f) => !f)} style={{ ...iconBtn, borderColor: flipY ? GOLD : LINE, color: flipY ? GOLD : TEXT }} title="Görseli dikey aynala"><FlipVertical2 size={16} /></button>
                 <button onClick={() => { setCalPx(pxPerCm); setCalibrating(true); }} style={{ ...btn, marginLeft: "auto", borderColor: TEAL, color: TEAL }}><Ruler size={15} /> Cetveli ayarla</button>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
@@ -727,6 +751,9 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                 <button onClick={copySeq} style={{ ...btn, flex: 1, minWidth: 120 }}>{copied ? <Check size={15} color={TEAL} /> : <Copy size={15} />} {copied ? "Kopyalandı" : "Renk sırası"}</button>
                 <button onClick={downloadPng} style={{ ...btn, flex: 1, minWidth: 120, borderColor: GOLD, color: GOLD }}><Download size={15} /> PNG indir</button>
                 <button onClick={saveCurrent} style={{ ...btn, flex: 1, minWidth: 120 }}><Save size={15} /> Deseni kaydet</button>
+                {activeDesignId && activeVariantId && savedList.find(x => x.id === activeDesignId)?.variants.some(v => v.id === activeVariantId) && (
+                  <button onClick={saveOverVariant} style={{ ...btn, flex: 1, minWidth: 120, borderColor: GOLD, color: NAVY, background: GOLD, fontWeight: 700 }}><Save size={15} /> Üzerine kaydet</button>
+                )}
                 {activeDesignId && savedList.some(x => x.id === activeDesignId) && (
                   <button onClick={() => addVariantTo(savedList.find(x => x.id === activeDesignId))} style={{ ...btn, flex: 1, minWidth: 120, borderColor: TEAL, color: TEAL }}><Plus size={15} /> Varyant olarak kaydet</button>
                 )}

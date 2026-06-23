@@ -627,9 +627,9 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                       <input value={s.tag || ""} onChange={(e) => setTag(s.id, e.target.value)} placeholder="b1" title="Bant etiketi (grup adı)" style={{ width: 42, fontSize: 12, color: TEXT, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 6, padding: "7px 4px", textAlign: "center" }} />
                       <button onClick={() => selectByTag(s.tag)} disabled={!s.tag} title="Aynı etiketli satırları seç" style={{ ...iconBtn, opacity: s.tag ? 1 : 0.3 }}><Layers size={13} /></button>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 130 }}>
-                      <NumInput value={s.ends} decimals={0} onCommit={(n) => setEnds(s.id, n)} suffix={unitLabel} width={52} />
-                      <NumInput value={density > 0 ? s.ends / density : 0} decimals={2} onCommit={(n) => setCm(s.id, n)} suffix="cm" width={60} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 230 }}>
+                      <NumInput value={s.ends} decimals={0} onCommit={(n) => setEnds(s.id, n)} suffix={unitLabel} width={104} />
+                      <NumInput value={density > 0 ? s.ends / density : 0} decimals={2} onCommit={(n) => setCm(s.id, n)} suffix="cm" width={120} />
                     </div>
                     <div style={{ display: "flex", gap: 2, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => moveSeg(s.id, -1)} disabled={i === 0} style={{ ...iconBtn, opacity: i === 0 ? 0.3 : 1 }}><ArrowUp size={14} /></button>

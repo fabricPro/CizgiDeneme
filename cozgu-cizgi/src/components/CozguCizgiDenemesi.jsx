@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload, Pencil, FilePlus, Layers, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { Plus, Trash2, Copy, ArrowUp, ArrowDown, Download, Check, RotateCcw, ZoomIn, ZoomOut, Maximize, Ruler, Sparkles, Loader2, ArrowRight, Settings, X, Eye, EyeOff, Save, FolderOpen, Upload, Pencil, FilePlus, Layers, ChevronDown, ChevronRight, Search, FlipHorizontal2, Maximize2 } from "lucide-react";
 import { storage } from "../lib/storage";
 import { generateText } from "../lib/ai";
 import { listDesigns, saveDesign, addVariant, deleteVariant, deleteDesign, renameDesign, renameVariant, exportDesigns, importDesigns } from "../lib/library";
@@ -99,6 +99,14 @@ export default function CozguCizgiDenemesi() {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [reportMode, setReportMode] = useState("repeat"); // "repeat" | "unit" (tekrarlı / birim rapor)
+  const [fullscreen, setFullscreen] = useState(false); // simülatör tam ekran
+  useEffect(() => {
+    if (!fullscreen) return;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", onKey); };
+  }, [fullscreen]);
   const [calibrating, setCalibrating] = useState(false);
   const [calPx, setCalPx] = useState(38);
 
@@ -239,7 +247,10 @@ export default function CozguCizgiDenemesi() {
     draw();
     const r = () => draw();
     window.addEventListener("resize", r);
-    return () => window.removeEventListener("resize", r);
+    // wrap boyutu değişince (tam ekran geçişi dahil) yeniden çiz
+    let ro;
+    if (wrapRef.current && "ResizeObserver" in window) { ro = new ResizeObserver(r); ro.observe(wrapRef.current); }
+    return () => { window.removeEventListener("resize", r); if (ro) ro.disconnect(); };
   }, [draw]);
 
   // pan (sürükleme)
@@ -270,6 +281,7 @@ export default function CozguCizgiDenemesi() {
   const removeSeg = (id) => { setList((s) => s.filter((x) => x.id !== id)); setCheckedIds((c) => { if (!c.has(id)) return c; const n = new Set(c); n.delete(id); return n; }); };
   const dupSeg = (id) => setList((s) => { const i = s.findIndex((x) => x.id === id); const arr = [...s]; arr.splice(i + 1, 0, { ...s[i], id: nextId++ }); return arr; });
   const moveSeg = (id, d) => setList((s) => { const i = s.findIndex((x) => x.id === id), j = i + d; if (j < 0 || j >= s.length) return s; const arr = [...s]; [arr[i], arr[j]] = [arr[j], arr[i]]; return arr; });
+  const reverseList = () => setList((s) => [...s].reverse()); // çizgi sırasını ters çevir (aynalama)
   const addSeg = () => { const nid = nextId++; setList((s) => [...s, { id: nid, color: palette[1] || "#CCCCCC", ends: 8, tag: "" }]); setSelectedId(nid); };
   const setEnds = (id, n) => updateSeg(id, { ends: Math.max(0, Math.round(n)) });
   const setCm = (id, cm) => updateSeg(id, { ends: Math.max(0, Math.round((cm || 0) * density)) });
@@ -568,6 +580,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
               <span style={{ fontSize: 12, fontWeight: 600, color: MUTE, textTransform: "uppercase", letterSpacing: 1 }}>{mode === "check" ? (activeKey === "warp" ? "Çözgü renk sırası" : "Atkı renk sırası") : `${sysLabel} renk sırası`}</span>
               <div style={{ display: "flex", gap: 6 }}>
                 <button onClick={newDesign} style={{ ...btn, padding: "5px 9px" }} title="Boş çalışma sayfası aç"><FilePlus size={14} /> Yeni desen</button>
+                <button onClick={reverseList} disabled={!list.length} style={{ ...iconBtn, opacity: list.length ? 1 : 0.4 }} title="Çizgi sırasını ters çevir"><FlipHorizontal2 size={15} /></button>
                 <button onClick={reset} style={iconBtn} title="Örnek deseni yükle"><RotateCcw size={15} /></button>
               </div>
             </div>
@@ -632,13 +645,28 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
           {/* sağ: gerçek ölçek önizleme */}
           <div className="cd-preview" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 16 }}>
-              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${LINE}` }}>
+              <div style={fullscreen
+                ? { position: "fixed", inset: 0, zIndex: 55, background: cv.bg, overflow: "hidden" }
+                : { position: "relative", borderRadius: 10, overflow: "hidden", border: `1px solid ${LINE}` }}>
                 <div ref={wrapRef}
                   onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
                   onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
-                  style={{ width: "100%", height: 360, touchAction: "none", cursor: drag.current ? "grabbing" : "grab" }}>
+                  style={{ width: "100%", height: fullscreen ? "100%" : 360, touchAction: "none", cursor: drag.current ? "grabbing" : "grab" }}>
                   <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
                 </div>
+                {fullscreen && (
+                  <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", gap: 8, padding: 12, flexWrap: "wrap", background: "linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))" }}>
+                    <button onClick={() => setZoomKeep(zoom / 1.25)} style={{ ...iconBtn, background: PANEL }} title="Uzaklaş"><ZoomOut size={16} /></button>
+                    <span style={{ fontSize: 13, minWidth: 52, textAlign: "center", color: "#fff" }}>{Math.round(zoom * 100)}%</span>
+                    <button onClick={() => setZoomKeep(zoom * 1.25)} style={{ ...iconBtn, background: PANEL }} title="Yakınlaş"><ZoomIn size={16} /></button>
+                    <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} style={{ ...btn, background: PANEL }} title="Gerçek boyut">1:1</button>
+                    <button onClick={fitWidth} style={{ ...btn, background: PANEL }} title="Tümünü sığdır"><Maximize size={15} /> Sığdır</button>
+                    {[["repeat", "Tekrarlı"], ["unit", "Birim"]].map(([v, l]) => (
+                      <button key={v} onClick={() => setReportMode(v)} style={{ ...btn, padding: "6px 12px", background: reportMode === v ? "rgba(232,160,48,0.18)" : PANEL, borderColor: reportMode === v ? GOLD : LINE, color: reportMode === v ? GOLD : TEXT }}>{l}</button>
+                    ))}
+                    <button onClick={() => setFullscreen(false)} style={{ ...btn, marginLeft: "auto", background: PANEL, borderColor: GOLD, color: GOLD }}><X size={16} /> Kapat</button>
+                  </div>
+                )}
                 {calibrating && (
                   <div style={{ position: "fixed", inset: 0, zIndex: 50, background: "var(--scrim)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16, textAlign: "center", overflow: "auto" }}>
                     <p style={{ fontSize: 14, color: TEXT, maxWidth: 420, margin: "0 0 18px", lineHeight: 1.5 }}>
@@ -677,6 +705,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
                 <button onClick={() => setZoomKeep(zoom * 1.25)} style={iconBtn} title="Yakınlaş"><ZoomIn size={16} /></button>
                 <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} style={btn} title="Gerçek boyut">1:1</button>
                 <button onClick={fitWidth} style={btn} title="Tümünü sığdır"><Maximize size={15} /> Sığdır</button>
+                <button onClick={() => setFullscreen(true)} style={btn} title="Simülatörü tam ekran aç"><Maximize2 size={15} /> Tam ekran</button>
                 <button onClick={() => { setCalPx(pxPerCm); setCalibrating(true); }} style={{ ...btn, marginLeft: "auto", borderColor: TEAL, color: TEAL }}><Ruler size={15} /> Cetveli ayarla</button>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>

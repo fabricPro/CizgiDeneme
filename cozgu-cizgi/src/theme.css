@@ -1,10 +1,26 @@
 :root, [data-theme="dark"] {
-  --bg:#0D1B2A; --panel:#13243A; --sunk:#0B1726; --line:#24405E;
-  --text:#E8EEF5; --mute:#8AA0B6; --gold:#E8A030; --teal:#2DD4BF; --red:#FF8B8B; --fab:#0D1B2A;
-  --scrim:rgba(11,23,38,0.92);
+  /* deep warm ink — atelier at night */
+  --bg:#10171F; --panel:#18222D; --sunk:#0C131A; --line:#283643;
+  --text:#ECF1F6; --mute:#90A2B3; --gold:#D8A85B; --teal:#48C9B0; --red:#F09690; --fab:#10171F;
+  --scrim:rgba(8,14,20,0.92);
+  --radius:14px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.30);
+  --shadow:0 8px 28px rgba(0,0,0,0.40);
+  --shadow-lg:0 24px 64px rgba(0,0,0,0.50);
+  --ring:rgba(216,168,91,0.35);
+  --font-display:"Fraunces","Georgia",serif;
+  --font-sans:"Inter",ui-sans-serif,system-ui,sans-serif;
 }
 [data-theme="light"] {
-  --bg:#F4F2EC; --panel:#FFFFFF; --sunk:#F7F5EF; --line:#E2DDD2;
-  --text:#1E2A36; --mute:#7A8694; --gold:#B7791F; --teal:#0E8C7D; --red:#C0392B; --fab:#FFFFFF;
-  --scrim:rgba(244,242,236,0.95);
+  /* warm linen / paper — atelier by day */
+  --bg:#F2EEE5; --panel:#FBF9F3; --sunk:#EBE5D8; --line:#DED6C5;
+  --text:#2B2620; --mute:#857B6B; --gold:#A87A2C; --teal:#1E8C7C; --red:#BF3B2E; --fab:#FFFFFF;
+  --scrim:rgba(242,238,229,0.95);
+  --radius:14px;
+  --shadow-sm:0 1px 2px rgba(80,68,46,0.08);
+  --shadow:0 10px 30px rgba(80,68,46,0.12);
+  --shadow-lg:0 24px 64px rgba(80,68,46,0.18);
+  --ring:rgba(168,122,44,0.30);
+  --font-display:"Fraunces","Georgia",serif;
+  --font-sans:"Inter",ui-sans-serif,system-ui,sans-serif;
 }

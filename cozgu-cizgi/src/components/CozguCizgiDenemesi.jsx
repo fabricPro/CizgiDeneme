@@ -17,8 +17,8 @@ const RED = "var(--red)";
 
 // Canvas için gerçek hex/rgba (canvas CSS değişkeni okuyamaz) — tema token'ları
 const CANVAS = {
-  dark:  { bg: "#0D1B2A", ruler: "rgba(11,23,38,0.78)", tick: "rgba(232,238,245,0.8)", tickLine: "rgba(232,238,245,0.55)", dash: "rgba(255,255,255,0.45)" },
-  light: { bg: "#FFFFFF", ruler: "rgba(240,236,226,0.92)", tick: "rgba(60,66,72,0.85)", tickLine: "rgba(60,66,72,0.5)", dash: "rgba(0,0,0,0.4)" },
+  dark:  { bg: "#10171F", ruler: "rgba(12,19,26,0.82)", tick: "rgba(236,241,246,0.82)", tickLine: "rgba(236,241,246,0.5)", dash: "rgba(255,255,255,0.42)" },
+  light: { bg: "#FFFFFF", ruler: "rgba(235,229,216,0.94)", tick: "rgba(43,38,32,0.85)", tickLine: "rgba(43,38,32,0.5)", dash: "rgba(0,0,0,0.4)" },
 };
 
 const RULER_CM = 10; // kalibrasyon referansı: ekrandaki cetvel uzunluğu (cm)
@@ -559,14 +559,21 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
   return (
     <div style={{ minHeight: "100%", background: NAVY, color: TEXT, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}>
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "20px 16px 40px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: -0.3 }}>Çizgi Simülatör</h1>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: GOLD }} />
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, paddingBottom: 18, marginBottom: 6, borderBottom: `1px solid ${LINE}` }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ display: "inline-flex", gap: 2 }} aria-hidden="true">
+                <span style={{ width: 4, height: 16, borderRadius: 2, background: GOLD }} />
+                <span style={{ width: 4, height: 16, borderRadius: 2, background: TEAL }} />
+                <span style={{ width: 4, height: 16, borderRadius: 2, background: MUTE }} />
+              </span>
+              <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: MUTE }}>Ev Tekstili · Perde Ar-Ge</span>
+            </div>
+            <h1 className="cd-display" style={{ fontSize: 30, fontWeight: 600, margin: 0, lineHeight: 1.05, color: TEXT }}>Çizgi Simülatör</h1>
           </div>
-          <button onClick={() => setShowSettings(true)} title="Ayarlar" aria-label="Ayarlar" style={{ ...iconBtn, padding: 9 }}><Settings size={18} /></button>
+          <button onClick={() => setShowSettings(true)} title="Ayarlar" aria-label="Ayarlar" style={{ ...iconBtn, padding: 10 }}><Settings size={18} /></button>
         </div>
-        <p style={{ color: MUTE, fontSize: 13, margin: "4px 0 16px" }}>Tel veya cm gir; master sıklık çevirir. Kalibre edince önizleme ekranda gerçek 1:1 ölçekte — kaydır, zoom yap, cetvelle ölç.</p>
+        <p style={{ color: MUTE, fontSize: 13.5, lineHeight: 1.55, margin: "0 0 18px", maxWidth: 620 }}>Tel veya cm gir; master sıklık çevirir. Kalibre edince önizleme ekranda gerçek 1:1 ölçekte — kaydır, zoom yap, cetvelle ölç.</p>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
           {[["editor", "Editör"], ["library", `Kayıtlı desenler (${savedList.length})`]].map(([v, l]) => (
@@ -802,7 +809,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
         <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, padding: 16, marginTop: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <Sparkles size={17} color={GOLD} />
-            <span style={{ fontSize: 14, fontWeight: 700 }}>Akıllı desen üretici</span>
+            <span className="cd-display" style={{ fontSize: 18, fontWeight: 600 }}>Akıllı desen üretici</span>
           </div>
           <p style={{ fontSize: 12, color: MUTE, margin: "0 0 14px" }}>Zemini sen seç; AI bu zemine uyumlu ticari aksanlarla birden fazla desen üretir. Varyantlarda zemin sabit kalır, sadece aksanlar değişir. Beğendiğini yükle, üstte düzenle.</p>
 
@@ -881,7 +888,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <FolderOpen size={17} color={GOLD} />
-              <span style={{ fontSize: 14, fontWeight: 700 }}>Kayıtlı desenler ({savedList.length})</span>
+              <span className="cd-display" style={{ fontSize: 18, fontWeight: 600 }}>Kayıtlı desenler ({savedList.length})</span>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={exportLibrary} disabled={!savedList.length} style={{ ...btn, padding: "6px 10px", opacity: savedList.length ? 1 : 0.5 }}><Download size={14} /> Dışa aktar</button>
@@ -997,7 +1004,7 @@ SADECE minified JSON döndür; markdown/açıklama YOK. İsim en fazla 3 kelime.
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Settings size={18} color={GOLD} />
-                <span style={{ fontSize: 16, fontWeight: 700, color: TEXT }}>Ayarlar</span>
+                <span className="cd-display" style={{ fontSize: 19, fontWeight: 600, color: TEXT }}>Ayarlar</span>
               </div>
               <button onClick={() => setShowSettings(false)} aria-label="Kapat" style={iconBtn}><X size={16} /></button>
             </div>
